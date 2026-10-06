@@ -19,7 +19,8 @@ final class MicroHotkeys {
       let result = GetEventParameter(event, EventParamName(kEventParamDirectObject),
                                     EventParamType(typeEventHotKeyID), nil,
                                     MemoryLayout<EventHotKeyID>.size, nil, &id)
-      guard result == noErr, id.signature == 0x52444d43 else { return result }
+      guard result == noErr else { return result }
+      guard id.signature == 0x52444d43 else { return OSStatus(eventNotHandledErr) }
       let owner = Unmanaged<MicroHotkeys>.fromOpaque(context).takeUnretainedValue()
       let number = Int(id.id)
       Task { @MainActor in owner.perform?(number) }

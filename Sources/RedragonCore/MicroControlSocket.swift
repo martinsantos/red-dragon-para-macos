@@ -26,7 +26,7 @@ public enum MicroControlSocket {
     withUnsafeMutableBytes(of: &address.sun_path) { target in target.copyBytes(from: path) }
     return address
   }
-  public static func configure(_ fd: Int32, timeout: Int = 35) {
+  public static func configure(_ fd: Int32, timeout: Int = 90) {
     var noSignal: Int32 = 1
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
     var interval = timeval(tv_sec: timeout, tv_usec: 0)

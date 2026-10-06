@@ -1,5 +1,13 @@
 # Cambios
 
+## 0.4.1 · volver a Normal durante una escritura
+
+- Las órdenes de modo esperan la escritura en curso y se ejecutan en orden; la sincronización automática de luces se pausa mientras haya órdenes pendientes.
+- Un segundo toggle durante la activación pide volver a Normal, aunque el hardware todavía no haya terminado de activarse.
+- Los controles de desactivación siguen disponibles durante la escritura y muestran la operación pendiente en la misma ventana.
+- El manejador del pad deja pasar los atajos de otros manejadores de Carbon.
+- Dieciocho comprobaciones incluyen el caso de activar y volver inmediatamente, con una sola transición ejecutándose a la vez.
+
 ## 0.4.0 · atajo, comandos y avisos de Codex
 
 - Atajo global ⌃⌥⌘C y menú Codex para activar o restaurar el teclado.

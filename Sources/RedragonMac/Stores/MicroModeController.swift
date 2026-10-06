@@ -10,6 +10,7 @@ final class MicroModeController: ObservableObject {
   let micro: MicroStore
   let notifications: MicroNotifications
   @Published private(set) var transitioning = false
+  @Published private(set) var requestedMode: Bool?
   @Published private(set) var shortcutMessage = "Atajo global: ⌃⌥⌘C"
   @Published private(set) var commandMessage = "Comandos: micro on / off / status"
   @Published private(set) var attentionNumbers: [Int] = []
@@ -27,6 +28,16 @@ final class MicroModeController: ObservableObject {
   private var tracker = MicroAttentionTracker()
   private var subscriptions: Set<AnyCancellable> = []
   private var started = false
+  private var pendingSubmissions = 0
+  private var requestRevision: UInt64 = 0
+  private lazy var requests = MicroModeRequestQueue(
+    transition: { [weak self] target in
+      guard let self else {
+        return .init(ok: false, status: .init(hardwareActive: false, recoveryPending: false,
+          skinVisible: false, busy: false, message: "App cerrada."), error: "App cerrada.")
+      }
+      return await self.transition(to: target)
+    }, changed: { [weak self] target, revision in await self?.requestedModeChanged(target, revision: revision) })
 
   init(defaults: UserDefaults = .standard, arguments: [String] = CommandLine.arguments) {
     self.defaults = defaults
@@ -75,7 +86,16 @@ final class MicroModeController: ObservableObject {
     .init(hardwareActive: store.microHardwareConfirmed, recoveryPending: store.microRecovery != nil,
           skinVisible: micro.skinEnabled, busy: transitioning || store.busy, message: store.status)
   }
-  var canSwitch: Bool { !transitioning && !store.busy && !store.changed && !store.previewMode }
+  var canSwitch: Bool { !store.previewMode && (!store.changed || store.busy) }
+  var wantsMicro: Bool { requestedMode ?? (store.microRecovery != nil) }
+  private func requestedModeChanged(_ target: Bool?, revision: UInt64) {
+    guard revision >= requestRevision else { return }
+    requestRevision = revision
+    requestedMode = target
+    transitioning = target != nil || pendingSubmissions > 0
+    if target == false { micro.syncLights = false }
+    if !transitioning { registerActions(); synchronizeLights() }
+  }
   func perform(_ command: MicroCommand) {
     Task {
       let response = await execute(command)
@@ -91,12 +111,32 @@ final class MicroModeController: ObservableObject {
     }
     guard canSwitch else {
       return .init(ok: false, status: status, error: store.previewMode
-        ? "Vista previa: no se modifica el teclado." : "Hay una operación o cambios pendientes. Esperá, aplicá o descartá antes de cambiar de modo.")
+        ? "Vista previa: no se modifica el teclado." : "Aplicá o descartá los cambios pendientes antes de cambiar de modo.")
     }
     transitioning = true
-    defer { transitioning = false; registerActions(); synchronizeLights() }
-    let turnOn = command == .on || (command == .toggle && store.microRecovery == nil)
+    pendingSubmissions += 1
+    defer {
+      pendingSubmissions -= 1
+      if pendingSubmissions == 0 {
+        transitioning = false
+        requestedMode = nil
+        registerActions()
+        synchronizeLights()
+      }
+    }
+    return await requests.submit(command, currentActive: store.microRecovery != nil)
+  }
+  private func transition(to turnOn: Bool) async -> MicroControlResponse {
     do {
+      // Stop automatic LED updates while a mode request is pending. Finish the
+      // in-flight transaction before reading or restoring the keyboard.
+      if !turnOn { micro.syncLights = false }
+      let deadline = Date().addingTimeInterval(60)
+      while store.busy {
+        guard Date() < deadline else { throw S136Error.message("La escritura sigue en curso. No se confirmó el cambio de modo; consultá el estado antes de repetirlo.") }
+        try await Task.sleep(for: .milliseconds(100))
+      }
+      guard !store.changed else { throw S136Error.message("Aplicá o descartá los cambios pendientes antes de cambiar de modo.") }
       if turnOn {
         micro.skinEnabled = true
         try await store.readKeyboardForMicro()
@@ -105,7 +145,7 @@ final class MicroModeController: ObservableObject {
             throw S136Error.message("Hay un respaldo Micro pendiente. Volvé al teclado normal antes de activarlo otra vez.")
           }
         } else {
-          if !micro.router.routes.isEmpty { micro.syncLights = true }
+          if !micro.router.routes.isEmpty && requestedMode != false { micro.syncLights = true }
           try await store.activateMicroNow(micro.bindings)
         }
       } else {
@@ -118,12 +158,12 @@ final class MicroModeController: ObservableObject {
       }
       // The operation has finished; report completion, not a transitional success.
       var confirmed = status
-      confirmed.busy = false
+      confirmed.busy = store.busy || pendingSubmissions > 1
       return .init(ok: true, status: confirmed)
     } catch {
       store.error = error.localizedDescription
       var finished = status
-      finished.busy = false
+      finished.busy = store.busy || pendingSubmissions > 1
       return .init(ok: false, status: finished, error: error.localizedDescription)
     }
   }

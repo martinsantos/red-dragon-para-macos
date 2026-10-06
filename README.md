@@ -2,7 +2,7 @@
 
 Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693**. Permite leer y guardar ajustes del kit mediante USB HID, con respaldos y verificación de las escrituras.
 
-**Proyecto comunitario independiente, versión preliminar 0.4.0.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
+**Proyecto comunitario independiente, versión preliminar 0.4.1.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
 
 [Descargar versión preliminar](https://github.com/martinsantos/red-dragon-para-macos/releases) · [Validación y protocolo](docs/VALIDATION.md) · [Información para Redragon](docs/REDRAGON-ADOPTION.md)
 
@@ -24,7 +24,7 @@ Las pruebas de hardware verifican los bytes guardados y restaurados. La lectura 
 
 ## Usar la app
 
-Requiere **macOS 14 o posterior**. La descarga 0.4.0 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
+Requiere **macOS 14 o posterior**. La descarga 0.4.1 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
 
 1. Conectá el receptor USB del kit y encendé el teclado en **2,4 GHz**. Para configurar el mouse en la conexión validada, usá su cable USB.
 2. Abrí `RedragonMac.app`.
@@ -53,6 +53,8 @@ Desde la carpeta del repositorio:
 ```
 
 El script abre la misma app si hace falta. El CLI incluido en el bundle admite `s136ctl micro on|off|toggle|status|show [--json]` y requiere la app abierta. No crea otro controlador de hardware: envía la orden a la instancia existente por un socket local privado del usuario. Un error de comunicación no confirma el resultado; consultá `status` antes de repetir `toggle`. `on` y `off` son idempotentes.
+
+Si el teclado está escribiendo ajustes o actualizando las luces, la orden de volver a Normal queda pendiente y se ejecuta al terminar esa escritura. La interfaz muestra «Volviendo al teclado normal · esperando que termine la escritura…». Un segundo toggle invierte el modo solicitado, incluso durante la activación. Las órdenes se ejecutan en orden y los cambios de luces se pausan hasta vaciar la cola.
 
 En el panel o menú Codex, activá **Avisarme cuando Codex necesite respuesta** y permití las notificaciones de macOS. Un nuevo pedido registrado por un chat local conectado produce un aviso con **Activar Codex Micro**. El aviso no cambia el modo automáticamente. Se omiten las preguntas antiguas al abrir o conectar un chat y se evitan avisos duplicados; una pregunta nueva puede avisar aunque otra siga pendiente. La app debe estar abierta y el chat conectado al enrutador local. Las aprobaciones ausentes del registro no generan avisos.
 
@@ -98,7 +100,7 @@ cd red-dragon-para-macos
 ./script/build_and_run.sh
 ```
 
-`check.sh` compila la app y el CLI, ejecuta diecisiete comprobaciones del protocolo, los respaldos, el enrutador, los avisos y el canal de comandos, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
+`check.sh` compila la app y el CLI, ejecuta dieciocho comprobaciones del protocolo, los respaldos, el enrutador, los avisos y el canal de comandos, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
 
 ```sh
 # Generar un ZIP de la compilación release y su SHA-256.

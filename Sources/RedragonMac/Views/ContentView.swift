@@ -57,8 +57,8 @@ struct ContentView: View {
     }
     .toolbar {
       ToolbarItem {
-        Button(store.microRecovery == nil ? "Activar Codex Micro" : "Desactivar Codex Micro") {
-          mode.perform(.toggle)
+        Button(mode.wantsMicro ? "Desactivar Codex Micro" : "Activar Codex Micro") {
+          mode.perform(mode.wantsMicro ? .off : .on)
         }.disabled(!mode.canSwitch).help("⌃⌥⌘C · activa o restaura el teclado")
       }
       ToolbarItem {

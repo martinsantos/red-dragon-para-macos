@@ -28,6 +28,10 @@ struct CodexMicroView: View {
       VStack(alignment: .leading, spacing: 24) {
         header
         hardwareBar
+        if mode.transitioning {
+          Label(mode.requestedMode == false ? "Volviendo al teclado normal · esperando que termine la escritura…" : "Activando Codex Micro · verificando el teclado…", systemImage: "hourglass")
+            .font(.callout).foregroundStyle(.orange)
+        }
         VStack(alignment: .leading, spacing: 8) {
           Text(mode.shortcutMessage).font(.callout.weight(.medium))
           Text(mode.commandMessage).font(.caption.monospaced()).foregroundStyle(.secondary)

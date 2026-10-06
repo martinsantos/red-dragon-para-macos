@@ -126,3 +126,11 @@ Se probó el canal local contra la app real: `micro status` consultó el estado;
 El atajo global ⌃⌥⌘C se registró sin error con Carbon. La simulación de teclas de la herramienta de interfaz no disparó el atajo; su confirmación desde el teclado físico sigue pendiente. Las teclas físicas Num 1–6 continúan pendientes de validación independiente.
 
 Se habilitó la preferencia de avisos en la app. La entrega del aviso depende del permiso de Notificaciones de macOS; la herramienta de interfaz se interrumpió al revisar ese permiso, por lo que no se considera comprobada la entrega del banner ni su botón de activación. Los avisos requieren el chat local conectado y la app abierta. No activan el teclado ni resuelven aprobaciones automáticamente.
+
+## Desactivación durante escrituras en 0.4.1
+
+El usuario informó que la activación funcionó una vez y la vuelta a Normal falló. Su captura mostró «Hay una operación o cambios pendientes» durante el modo activo. La causa era la comprobación inmediata de `busy`: rechazaba el atajo cuando una actualización de luces u otra orden aún escribía. Se reemplazó por una cola serial de transiciones; se pausa la sincronización mientras haya órdenes pendientes y se espera la transacción activa antes de restaurar. El mensaje de cambios pendientes queda reservado para ediciones sin aplicar.
+
+Dieciocho comprobaciones y la compilación release aprobaron. La prueba de regresión mantiene la primera activación pendiente y solicita otro toggle cuando el hardware todavía indica Normal: se ejecutaron activar y desactivar en ese orden, sin concurrencia ni rechazo. También se probaron dos toggles seguidos contra la app y el K628 reales; ambos devolvieron éxito. La interfaz mostró «Volviendo al teclado normal · esperando que termine la escritura…» en la misma ventana. Se aceptó además una desactivación con otra operación en curso.
+
+Tras vaciar la cola y confirmar `busy: false`, `hardwareActive: false` y ausencia de recuperación pendiente, una lectura independiente comparó los cuatro buffers con el respaldo inicial: configuración, mapa, macros y paleta coincidieron byte por byte. No se considera una comprobación visual de cada luz. El permiso de Notificaciones apareció como permitido en la app; la entrega del banner continúa pendiente de observación.

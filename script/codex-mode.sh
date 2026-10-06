@@ -9,7 +9,7 @@ if [[ ! -x "$CLI" ]]; then echo "Compilá la app una vez con script/build_and_ru
 if [[ "$COMMAND" != status ]]; then
   open -g "$APP_BUNDLE"
   for attempt in {1..60}; do
-    if [[ "$("$CLI" micro status --json 2>/dev/null | /usr/bin/plutil -extract status.busy raw -o - - 2>/dev/null)" == false ]]; then break; fi
+    if "$CLI" micro status --json >/dev/null 2>&1; then break; fi
     sleep 0.25
   done
 fi

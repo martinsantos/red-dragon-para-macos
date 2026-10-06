@@ -386,6 +386,63 @@ func checkMicroControlBoundary() throws {
   expectFailure(try MicroControlSocket.read(pair[0], limit: 64))
 }
 
+actor ModeQueueFixture {
+  var sequence: [Bool] = []
+  var active = 0
+  var maxActive = 0
+  private var gate: CheckedContinuation<Void, Never>?
+  private var started: CheckedContinuation<Void, Never>?
+  private var offQueued: CheckedContinuation<Void, Never>?
+  private var didQueueOff = false
+  func transition(_ target: Bool) async -> MicroControlResponse {
+    active += 1; maxActive = max(active, maxActive)
+    sequence.append(target)
+    if sequence.count == 1 {
+      await withCheckedContinuation { continuation in
+        gate = continuation; started?.resume(); started = nil
+      }
+    }
+    active -= 1
+    return .init(ok: true, status: .init(hardwareActive: target, recoveryPending: target,
+      skinVisible: target, busy: false, message: target ? "on" : "off"))
+  }
+  func changed(_ target: Bool?, revision: UInt64) {
+    if target == false { didQueueOff = true; offQueued?.resume(); offQueued = nil }
+  }
+  func waitForStart() async {
+    if gate != nil { return }
+    await withCheckedContinuation { started = $0 }
+  }
+  func waitForOff() async {
+    if didQueueOff { return }
+    await withCheckedContinuation { offQueued = $0 }
+  }
+  func release() { gate?.resume(); gate = nil }
+}
+
+func checkModeRequestsDuringActivation() async throws {
+  let fixture = ModeQueueFixture()
+  let queue = MicroModeRequestQueue(transition: { await fixture.transition($0) },
+    changed: { await fixture.changed($0, revision: $1) })
+  let on = Task { await queue.submit(.toggle, currentActive: false) }
+  await fixture.waitForStart()
+  // The hardware still reports Normal while the first write is pending.
+  // A second toggle must request OFF, not duplicate the activation or reject it.
+  let off = Task { await queue.submit(.toggle, currentActive: false) }
+  await fixture.waitForOff()
+  await fixture.release()
+  let activated = await on.value
+  let restored = await off.value
+  expectEqual(activated.ok, true)
+  expectEqual(activated.status.hardwareActive, true)
+  expectEqual(restored.ok, true)
+  expectEqual(restored.status.hardwareActive, false)
+  expectEqual(await fixture.sequence, [true, false])
+  expectEqual(await fixture.maxActive, 1)
+  expectEqual(await queue.submit(.status, currentActive: false).ok, false)
+  expectEqual(await fixture.sequence, [true, false])
+}
+
 let checks = ProtocolChecks()
 let physicalKeys = KeyboardLayout.keys
 expectEqual(physicalKeys.count, 78)
@@ -414,4 +471,5 @@ try checkLocalCodexStateReducer()
 try await checkLocalReaderPartialLinesAndTruncation()
 try checkMicroAttentionTransitions()
 try checkMicroControlBoundary()
-print("PASS: 17 protocol, backup, lighting, Micro, router, notification and local command checks.")
+try await checkModeRequestsDuringActivation()
+print("PASS: 18 protocol, backup, lighting, Micro, router, notification and local command checks.")
