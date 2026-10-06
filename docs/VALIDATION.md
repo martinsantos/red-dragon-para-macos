@@ -93,3 +93,13 @@ La tabla recuperada de la función 0x4939a0 del programa del fabricante es efect
 Se repitió la prueba azul fijo, brillo 100%, Multicolor apagado, con el registro corregido. El usuario confirmó «Sí, ahora quedó azul». La prueba temporal restaura y verifica los buffers anteriores. Esta confirma el color fijo azul del teclado en la conexión comprobada; no valida automáticamente todos los efectos, colores por tecla o conexiones.
 
 Después de abrir la app 0.2.1, el usuario también seleccionó Teclado → Iluminación → Azul y confirmó «Sí, desde la app cambia a azul». Se verificó así el recorrido completo del botón SwiftUI, la escritura y el resultado visible en el K628. La revisión automatizada de otras pantallas se interrumpió por un fallo de SkyComputerUseService; sus gráficos compilaron y la correspondencia de las posiciones del teclado pasó la comprobación local.
+
+## Skin y enrutador local en 0.3.0
+
+- Catorce comprobaciones locales verifican asignaciones de las seis posiciones del pad, conservación de Fn y del resto de la matriz, recuperación selectiva, incompatibilidades y lectura incremental de JSONL, incluso líneas incompletas y truncamiento.
+- El registro real del chat de desarrollo devolvió `thinking`, después `attention` con una pregunta pendiente y otra vez `thinking` al recibir la respuesta del usuario. La interfaz mostró el chat conectado y su estado Trabajando. No se publican el registro ni sus rutas.
+- Una pregunta pendiente conserva el estado de atención aunque termine el turno; su respuesta permite pasar a completado. Una salida fallida de un comando no se interpreta como error del agente.
+- La prueba temporal escribió y releyó Num 1 azul, 2 ámbar, 3 verde, 4 blanco, 5 rojo y 6 apagado. Se restauraron configuración, mapa, macros y paleta originales byte por byte. La confirmación visual del usuario queda pendiente; no se considera verificada.
+- El detector no observó F13 durante la primera prueba de inputs. Se sustituyó por usos HID estándar del pad y un registro Carbon de teclas de acción. Su recorrido completo desde una pulsación física hasta la apertura de un chat o copia de prefunción sigue pendiente de confirmación.
+- La segunda prueba de uso normal restauró el perfil, pero no hubo una pulsación confirmada dentro de su intervalo. El registro Carbon aceptó Num 1, pero su prueba de callback también terminó sin confirmación física. La ausencia de detección no se considera prueba de funcionamiento.
+- El adaptador local depende del formato de eventos observado en esta versión de Codex Desktop. No observa aprobaciones, errores ni actividad ausentes del registro. El conector avanzado de App Server no fue validado contra el servidor privado de la app de escritorio.

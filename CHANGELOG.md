@@ -1,5 +1,16 @@
 # Cambios
 
+## 0.3.0 · skin Codex Micro y enrutador local
+
+- Skin activable con seis botones del pad numérico y regreso al modo normal.
+- Enrutador de los registros locales de Codex: inicio, fin y preguntas pendientes del chat exacto, sin otro servidor ni llamadas a modelos.
+- Acciones configurables: chat reciente, chat conectado, prefunción editable o solo indicador sin inputs.
+- Respaldo persistente antes de activar teclas y luces; restauración selectiva y recuperación completa.
+- Paleta de seis colores escrita, releída y restaurada byte por byte; confirmación visual pendiente.
+- No se confirmó F13 durante la prueba: las acciones de app usan las teclas normales del pad y Carbon; su recorrido físico completo requiere validación.
+- Conector opcional de solo lectura a un Codex App Server local.
+- Catorce comprobaciones locales incluyen recuperación, preguntas simultáneas y lectura incremental de registros.
+
 ## 0.2.1 · corrección de iluminación
 
 - Se corrige el registro de color independiente de cada efecto del teclado. Cambiar sólo el RGB general dejaba el color efectivo sin actualizar.

@@ -16,7 +16,8 @@ export SWIFTPM_MODULECACHE_OVERRIDE="$ROOT_DIR/work/swift-cache"
 mkdir -p "$CLANG_MODULE_CACHE_PATH" "$SWIFTPM_MODULECACHE_OVERRIDE"
 swift build --package-path "$ROOT_DIR" --configuration "$BUILD_CONFIGURATION" --scratch-path "$BUILD_DIR" --cache-path "$ROOT_DIR/work/package-cache" --config-path "$ROOT_DIR/work/package-config" --security-path "$ROOT_DIR/work/package-security" --disable-sandbox
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
-cp "$BUILD_DIR/$BUILD_CONFIGURATION/RedragonMac" "$APP_BUNDLE/Contents/MacOS/RedragonMac"
+cp "$BUILD_DIR/$BUILD_CONFIGURATION/RedragonMac" "$APP_BUNDLE/Contents/MacOS/RedragonMac.next"
+mv -f "$APP_BUNDLE/Contents/MacOS/RedragonMac.next" "$APP_BUNDLE/Contents/MacOS/RedragonMac"
 cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -26,8 +27,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>RED DRAGON PARA MACOS</string>
 <key>CFBundleDisplayName</key><string>RED DRAGON PARA MACOS</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.2.1</string>
-<key>CFBundleVersion</key><string>3</string>
+<key>CFBundleShortVersionString</key><string>0.3.0</string>
+<key>CFBundleVersion</key><string>4</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>NSHighResolutionCapable</key><true/>

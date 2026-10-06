@@ -8,6 +8,10 @@ final class DeviceStore: ObservableObject {
   private let controller: HardwareController
   private let backups: BackupRepository
   private let system = MacSystemIntegration()
+  private let microRepository = MicroRecoveryRepository()
+  @Published private(set) var microRecovery: MicroRecovery?
+  @Published private(set) var microHardwareConfirmed = false
+  var microBindingsForHotkeys: [MicroBinding]? { microHardwareConfirmed ? microRecovery?.bindings : nil }
 
   @Published private(set) var endpoints: [Endpoint] = []
   @Published private(set) var selectedID: String?
@@ -26,8 +30,16 @@ final class DeviceStore: ObservableObject {
   var selectedEndpoint: Endpoint? { endpoints.first { $0.id == selectedID } }
   var needsInputPermission: Bool { error?.contains("e00002e2") == true }
   var canRead: Bool { !busy && !previewMode && !changed }
-  var canApply: Bool { !busy && !previewMode && changed }
+  var canApply: Bool { !busy && !previewMode && changed && !microOwnsSelected }
   var canDiscard: Bool { !busy && changed }
+  var microOwnsSelected: Bool {
+    guard let recovery = microRecovery, let original else { return false }
+    return original.endpoint.productID == recovery.baseline.endpoint.productID
+      && original.endpoint.target == recovery.baseline.endpoint.target
+      && original.profile == recovery.baseline.profile
+  }
+  var canActivateMicro: Bool { !busy && !previewMode && !changed && edited?.isKeyboard == true && microRecovery == nil }
+  var canRestoreMicro: Bool { !busy && !previewMode && !changed && microOwnsSelected }
 
   init(
     controller: HardwareController = HardwareController(),
@@ -36,6 +48,10 @@ final class DeviceStore: ObservableObject {
     self.controller = controller
     self.backups = backups
     previewMode = arguments.contains("--preview")
+    if !previewMode {
+      do { microRecovery = try microRepository.load() }
+      catch { self.error = "No se pudo cargar la recuperación Micro: \(error.localizedDescription)" }
+    }
     guard let index = arguments.firstIndex(of: "--preview") else { return }
     guard index + 1 < arguments.count else {
       error = "Indicá el archivo de respaldo para la vista previa."
@@ -91,6 +107,9 @@ final class DeviceStore: ObservableObject {
         let snapshot = try await controller.read(endpoint)
         original = snapshot
         edited = snapshot
+        if microOwnsSelected, let recovery = microRecovery {
+          microHardwareConfirmed = snapshot.sameContents(as: recovery.installed)
+        }
         status =
           "Leído · perfil \(snapshot.profile + 1) · \(snapshot.isKeyboard ? "teclado" : "mouse")"
       } catch {
@@ -101,7 +120,7 @@ final class DeviceStore: ObservableObject {
   }
 
   func edit(_ action: (inout Snapshot) throws -> Void) {
-    guard !busy, var snapshot = edited else { return }
+    guard !busy, !microOwnsSelected, var snapshot = edited else { return }
     do {
       try action(&snapshot)
       edited = snapshot
@@ -131,7 +150,7 @@ final class DeviceStore: ObservableObject {
   }
 
   func restoreBackup() {
-    guard !busy, !changed, let original,
+    guard !busy, !changed, !microOwnsSelected, let original,
       let url = system.chooseBackup(in: backups.directory)
     else { return }
     do {
@@ -143,7 +162,7 @@ final class DeviceStore: ObservableObject {
   }
   /// Apply only the lighting fields; preserve unrelated pending key/macro edits.
   func applySolidColor(_ rgb: [UInt8]) {
-    guard !busy, let original, let edited else { return }
+    guard !busy, !microOwnsSelected, let original, let edited else { return }
     if previewMode {
       edit { try $0.setSolidColor(rgb) }
       status = "Vista previa del color · sin escrituras al dispositivo."
@@ -182,6 +201,111 @@ final class DeviceStore: ObservableObject {
   }
 
   func discard() { edited = original }
+
+  func activateMicro(_ bindings: [MicroBinding]) {
+    guard canActivateMicro, let original else { return }
+    busy = true
+    error = nil
+    status = "Respaldando y activando las seis teclas Micro…"
+    Task {
+      defer { busy = false }
+      do {
+        let planned = try CodexMicroProfile.prepare(original, bindings: bindings)
+        let backup = try backups.save(original)
+        backupURL = backup
+        let recovery = MicroRecovery(baseline: original, installed: planned, bindings: bindings, backupURL: backup)
+        // Persist recovery BEFORE the first hardware write, including across app crashes.
+        try microRepository.save(recovery)
+        microRecovery = recovery
+        let verified = try await controller.apply(original: original, edited: planned)
+        self.original = verified
+        self.edited = verified
+        microHardwareConfirmed = true
+        status = "Micro activo · Num 1–6 · respaldo guardado."
+      } catch {
+        self.error = error.localizedDescription
+        status = "Activación sin confirmar. Volvé a leer y usá Volver al teclado normal."
+      }
+    }
+  }
+
+  func updateMicro(_ bindings: [MicroBinding], states: [MicroState]? = nil) {
+    guard canRestoreMicro, let original, let previous = microRecovery else { return }
+    busy = true
+    Task {
+      defer { busy = false }
+      do {
+        var planned = try CodexMicroProfile.prepare(original, bindings: bindings)
+        if let states { planned = try CodexMicroProfile.withStates(states, on: planned) }
+        if planned.sameContents(as: original) && bindings == previous.bindings { return }
+        var recovery = previous
+        recovery.installed = planned
+        recovery.bindings = bindings
+        try microRepository.save(recovery)
+        let verified = try await controller.apply(original: original, edited: planned)
+        microRecovery = recovery
+        self.original = verified
+        self.edited = verified
+        microHardwareConfirmed = true
+        status = "Perfil Micro actualizado y verificado."
+      } catch {
+        try? microRepository.save(previous)
+        self.error = error.localizedDescription
+        status = "No se pudo actualizar Micro. Volvé a leer el dispositivo."
+      }
+    }
+  }
+
+  func restoreMicro() {
+    guard canRestoreMicro, let current = original, let recovery = microRecovery else { return }
+    busy = true
+    error = nil
+    Task {
+      defer { busy = false }
+      do {
+        var baseline = try recovery.baseline.preparedForRestore(on: current)
+        var installed = try recovery.installed.preparedForRestore(on: current)
+        baseline.endpoint = current.endpoint
+        installed.endpoint = current.endpoint
+        let restored: Snapshot
+        if baseline.sameContents(as: current) {
+          restored = current // A failed activation was already rolled back.
+        } else {
+          let planned = try CodexMicroProfile.restore(baseline: baseline, installed: installed, current: current)
+          restored = try await controller.apply(original: current, edited: planned)
+        }
+        self.original = restored
+        self.edited = restored
+        try microRepository.clear()
+        microRecovery = nil
+        microHardwareConfirmed = false
+        status = "Teclas y luces anteriores restauradas."
+      } catch {
+        self.error = error.localizedDescription
+        status = "El respaldo se conserva. No se confirmó la restauración."
+      }
+    }
+  }
+
+  func restoreFullMicroBackup() {
+    guard canRestoreMicro, let current = original, let recovery = microRecovery else { return }
+    busy = true
+    error = nil
+    Task {
+      defer { busy = false }
+      do {
+        let planned = try recovery.baseline.preparedForRestore(on: current)
+        backupURL = try backups.save(current)
+        let verified = try await controller.apply(original: current, edited: planned)
+        self.original = verified
+        self.edited = verified
+        try microRepository.clear()
+        microRecovery = nil
+        microHardwareConfirmed = false
+        status = "Respaldo anterior a Micro restaurado y verificado."
+      } catch { self.error = error.localizedDescription }
+    }
+  }
   func openInputSettings() { system.openInputSettings() }
   func showApplication() { system.showApplication() }
   func showBackups() {

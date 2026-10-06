@@ -214,6 +214,103 @@ final class ProtocolChecks {
 
 }
 
+func microFixture() -> Snapshot {
+  let endpoint = Endpoint(registryID: 1, productID: 0x50b8, target: 1, product: "Receiver")
+  var caps = [UInt8](repeating: 0, count: 34)
+  caps[0] = 0xaa; caps[1] = 0x55; caps[4] = 6; caps[5] = 128; caps[6] = 24; caps[8] = 2
+  var config = [UInt8](repeating: 7, count: 99)
+  config[0] = 0; config[1] = 6; config[2] = 3
+  var snapshot = Snapshot(endpoint: endpoint, capabilities: caps, configuration: config,
+    keymap: [UInt8](repeating: 0, count: 384), macroData: [UInt8](repeating: 0, count: 3072),
+    customColors: [UInt8](repeating: 20, count: 384))
+  snapshot.keymap.replaceSubrange(222..<225, with: [0xa0, 1, 0])
+  return snapshot
+}
+
+func checkMicroProfileAndRecovery() throws {
+  let baseline = microFixture()
+  var bindings = MicroBinding.defaults
+  bindings[0].action = .localChat
+  bindings[5].action = .prompt
+  let installed = try CodexMicroProfile.prepare(baseline, bindings: bindings)
+  expectEqual(installed.assignment(at: 63), 0x200059)
+  expectEqual(installed.assignment(at: 83), 0x200c1f)
+  expectEqual(installed.assignment(at: 82), 0x20005e)
+  expectEqual(installed.assignment(at: 74), baseline.assignment(at: 74))
+  expectEqual(installed.macroData, baseline.macroData)
+  for slot in 0..<128 where !CodexMicroProfile.slots.contains(slot) {
+    expectEqual(installed.assignment(at: slot), baseline.assignment(at: slot))
+    expectEqual(Array(installed.customColors![slot * 3..<slot * 3 + 3]), Array(baseline.customColors![slot * 3..<slot * 3 + 3]))
+  }
+  expectEqual(try CodexMicroProfile.restore(baseline: baseline, installed: installed, current: installed).sameContents(as: baseline), true)
+  var external = installed
+  try external.assign(0x200005, to: 33)
+  let merged = try CodexMicroProfile.restore(baseline: baseline, installed: installed, current: external)
+  expectEqual(merged.assignment(at: 33), 0x200005)
+  try external.assign(0x200006, to: 63)
+  expectFailure(try CodexMicroProfile.restore(baseline: baseline, installed: installed, current: external))
+  expectFailure(try CodexMicroProfile.prepare(baseline, bindings: Array(bindings.prefix(5))))
+  expectFailure(try CodexMicroProfile.withStates([.thinking], on: installed))
+  let lit = try CodexMicroProfile.withStates([.thinking, .attention, .complete, .idle, .failed, .disconnected], on: installed)
+  expectEqual(Array(lit.customColors![63 * 3..<63 * 3 + 3]), MicroState.thinking.rgb)
+  expectEqual(lit.keymap, installed.keymap)
+  expectEqual(try CodexMicroProfile.restore(baseline: baseline, installed: lit, current: lit).sameContents(as: baseline), true)
+}
+
+func checkLocalCodexStateReducer() throws {
+  var state = CodexRolloutState()
+  func consume(_ type: String, _ payload: [String: Any]) throws {
+    state.consume(try JSONSerialization.data(withJSONObject: ["type": type, "timestamp": "2026-10-06T12:00:00.000Z", "payload": payload]))
+  }
+  try consume("session_meta", ["id": "11111111-1111-4111-8111-111111111111"])
+  try consume("event_msg", ["type": "task_started", "turn_id": "t1"])
+  expectEqual(state.state, .thinking)
+  try consume("response_item", ["type": "function_call", "name": "request_user_input_async", "call_id": "call_one"])
+  expectEqual(state.state, .attention)
+  try consume("response_item", ["type": "function_call_output", "call_id": "call_one", "output": "Question displayed"])
+  expectEqual(state.state, .attention)
+  try consume("response_item", ["type": "function_call", "name": "request_user_input_async", "call_id": "call_two"])
+  let reply = "<send_user_message_question_reply>\n[{\"questionItemId\":\"[\\\"request_user_input_async\\\",\\\"call_one\\\",0]\",\"answer\":\"Sí\"}]\n</send_user_message_question_reply>"
+  try consume("response_item", ["type": "message", "role": "user", "content": [["type": "input_text", "text": reply]]])
+  expectEqual(state.pendingQuestions, Set(["call_two"]))
+  expectEqual(state.state, .attention)
+  try consume("response_item", ["type": "function_call_output", "call_id": "call_two", "output": "{\"answers\":{\"q\":\"yes\"}}"])
+  expectEqual(state.state, .thinking)
+  try consume("event_msg", ["type": "task_complete", "turn_id": "old"])
+  expectEqual(state.state, .thinking)
+  try consume("event_msg", ["type": "item_completed", "item": ["type": "CommandExecution", "status": "failed"]])
+  expectEqual(state.state, .thinking) // A failed command is not a failed agent.
+  try consume("event_msg", ["type": "task_complete", "turn_id": "t1"])
+  expectEqual(state.state, .complete)
+  expectEqual(state.pendingQuestions.isEmpty, true)
+  try consume("event_msg", ["type": "task_started", "turn_id": "t2"])
+  try consume("response_item", ["type": "function_call", "name": "request_user_input_async", "call_id": "call_one"])
+  try consume("event_msg", ["type": "task_complete", "turn_id": "t2"])
+  expectEqual(state.state, .attention) // Ending a turn must not hide its pending question.
+  try consume("response_item", ["type": "message", "role": "user", "content": [["type": "input_text", "text": reply]]])
+  expectEqual(state.state, .complete)
+  state.consume(Data("incomplete JSON".utf8))
+  expectEqual(state.state, .complete)
+  expectEqual(MicroState.runtime(["type": "notLoaded"]), .disconnected)
+  expectEqual(MicroState.runtime(["type": "active", "activeFlags": ["waitingOnApproval"]]), .attention)
+}
+
+func checkLocalReaderPartialLinesAndTruncation() async throws {
+  let file = FileManager.default.temporaryDirectory.appendingPathComponent("micro-check-\(UUID().uuidString).jsonl")
+  defer { try? FileManager.default.removeItem(at: file) }
+  let header = "{\"type\":\"session_meta\",\"payload\":{\"id\":\"11111111-1111-4111-8111-111111111111\"}}\n"
+  try Data((header + "{\"type\":\"event_msg\",\"payload\":{\"type\":\"task_sta").utf8).write(to: file)
+  let reader = CodexRolloutReader(url: file)
+  expectEqual(try await reader.read().state, .disconnected)
+  let writer = try FileHandle(forWritingTo: file)
+  try writer.seekToEnd()
+  try writer.write(contentsOf: Data("rted\",\"turn_id\":\"t1\"}}\n".utf8))
+  try writer.close()
+  expectEqual(try await reader.read().state, .thinking)
+  try Data(header.utf8).write(to: file)
+  expectEqual(try await reader.read().state, .disconnected)
+}
+
 let checks = ProtocolChecks()
 let physicalKeys = KeyboardLayout.keys
 expectEqual(physicalKeys.count, 78)
@@ -236,4 +333,7 @@ try checks.testCustomColorPreservesOtherKeysAndSelectsBank()
 try checks.testImportedSnapshotValidationAndRestore()
 try checks.testSnapshotFileRoundTrip()
 try checks.testSolidColorUpdatesEffectRecordAndPreservesOtherSettings()
-print("PASS: 11 protocol, backup, lighting and physical-layout checks.")
+try checkMicroProfileAndRecovery()
+try checkLocalCodexStateReducer()
+try await checkLocalReaderPartialLinesAndTruncation()
+print("PASS: 14 protocol, backup, lighting, Micro profile and local router checks.")

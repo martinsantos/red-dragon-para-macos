@@ -27,7 +27,7 @@ struct DeviceDetailView: View {
           .padding(28)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .disabled(store.busy)
+      .disabled(store.busy || store.microOwnsSelected)
     }
   }
 }

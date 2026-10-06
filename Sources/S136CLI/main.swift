@@ -6,6 +6,12 @@ import RedragonCore
 struct CLI {
   static func main() async {
     do {
+      if CommandLine.arguments.dropFirst().first == "codex-state", CommandLine.arguments.count == 3 {
+        let reader = CodexRolloutReader(url: URL(fileURLWithPath: CommandLine.arguments[2]))
+        let state = try await reader.read()
+        print("thread=\(state.threadID ?? "unknown") state=\(state.state.rawValue) pendingQuestions=\(state.pendingQuestions.count)")
+        return
+      }
       let controller = HardwareController()
       let endpoints = await controller.endpoints()
       let command = CommandLine.arguments.dropFirst().first ?? "list"
@@ -13,7 +19,7 @@ struct CLI {
         for endpoint in endpoints { print(endpoint.id, endpoint.title) }
         return
       }
-      guard ["read", "restore", "verify-roundtrip", "verify-macro"].contains(command),
+      guard ["read", "restore", "verify-roundtrip", "verify-macro", "verify-micro"].contains(command),
         CommandLine.arguments.count >= 3,
         let endpoint = endpoints.first(where: { $0.id == CommandLine.arguments[2] })
       else {
@@ -25,6 +31,27 @@ struct CLI {
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
       encoder.dateEncodingStrategy = .iso8601
+      if command == "verify-micro" {
+        guard snapshot.isKeyboard, CommandLine.arguments.count == 4 else {
+          throw S136Error.message("Uso: s136ctl verify-micro ID_TECLADO DIRECTORIO_RESPALDO")
+        }
+        let folder = URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try SnapshotFile.save(snapshot, to: folder.appendingPathComponent("keyboard-before-micro.json"))
+        var bindings = MicroBinding.defaults
+        bindings[0].action = .localChat
+        var planned = try CodexMicroProfile.prepare(snapshot, bindings: bindings)
+        planned = try CodexMicroProfile.withStates([.thinking, .attention, .complete, .idle, .failed, .disconnected], on: planned)
+        let applied = try await controller.apply(original: snapshot, edited: planned)
+        print("READY: Num 1 azul, 2 ámbar, 3 verde, 4 blanco, 5 rojo, 6 apagado. Pulsá Num 1; se restaurará en hasta 45 segundos.")
+        fflush(stdout)
+        let observed = await controller.waitForKeypad1(endpoint, seconds: 45)
+        let restored = try await controller.apply(original: applied, edited: snapshot)
+        guard restored.sameContents(as: snapshot) else { throw S136Error.message("La restauración Micro no coincide con el respaldo.") }
+        print("PASS: perfil Micro escrito, releído y ajustes originales restaurados byte por byte.")
+        print(observed ? "PASS: Num 1 emitió la tecla normal del pad desde el teclado." : "NOT VERIFIED: no se observó Num 1 durante la prueba.")
+        return
+      }
       if command == "restore" {
         guard CommandLine.arguments.count == 4 else {
           throw S136Error.message("Indicá un respaldo JSON.")
