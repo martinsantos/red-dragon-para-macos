@@ -82,4 +82,12 @@ Ejecución física de macros; mouse por receptor; Bluetooth; teclado por USB; ot
 
 ## Refactorización 0.2.0
 
-Se conserva el formato de paquetes, los comandos y el transporte del hardware. Las diez comprobaciones locales agregan validación de snapshots importados, compatibilidad de restauración y persistencia JSON. Los cambios de interfaz se revisan en modo de vista previa; no se repiten escrituras al kit como parte del CI. Los dumps de configuración del usuario y los binarios del fabricante no se publican en el repositorio.
+Se conserva el formato de paquetes, los comandos y el transporte del hardware. Las once comprobaciones locales agregan validación de snapshots importados, compatibilidad de restauración y persistencia JSON. Los cambios de interfaz se revisan en modo de vista previa; no se repiten escrituras al kit como parte del CI. Los dumps de configuración del usuario y los binarios del fabricante no se publican en el repositorio.
+
+## Iluminación corregida en 0.2.1
+
+La prueba visual del usuario mostró que guardar el RGB general no cambiaba la luz del K628. El ejecutable del fabricante actualiza también un registro por efecto: 13 registros de cinco bytes desde el índice 29 de la configuración. Cada registro conserva un byte de selección y contiene Multicolor y RGB. El efecto 6 (Color fijo) usa el registro 4, desplazamiento 49; se actualizan los índices 50–53 junto con los campos generales.
+
+La tabla recuperada de la función 0x4939a0 del programa del fabricante es efecto→registro: 1→0, 2→1, 3→2, 5→3, 6→4, 7→5, 8→6, 9→7, 10→8, 13→9, 14→10, 15→11 y 16→12. Los otros efectos no se fuerzan a una posición de esa tabla.
+
+Se repitió la prueba azul fijo, brillo 100%, Multicolor apagado, con el registro corregido. El usuario confirmó «Sí, ahora quedó azul». La prueba temporal restaura y verifica los buffers anteriores. Esta confirma el color fijo azul del teclado en la conexión comprobada; no valida automáticamente todos los efectos, colores por tecla o conexiones.

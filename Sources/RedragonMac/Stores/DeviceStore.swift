@@ -141,6 +141,45 @@ final class DeviceStore: ObservableObject {
       self.error = error.localizedDescription
     }
   }
+  /// Apply only the lighting fields; preserve unrelated pending key/macro edits.
+  func applySolidColor(_ rgb: [UInt8]) {
+    guard !busy, let original, let edited else { return }
+    if previewMode {
+      edit { try $0.setSolidColor(rgb) }
+      status = "Vista previa del color · sin escrituras al dispositivo."
+      return
+    }
+    var solid = original
+    do { try solid.setSolidColor(rgb) } catch {
+      self.error = error.localizedDescription
+      return
+    }
+    busy = true
+    error = nil
+    status = "Aplicando color fijo…"
+    Task {
+      defer { busy = false }
+      do {
+        backupURL = try backups.save(original)
+        let verified = try await controller.apply(original: original, edited: solid)
+        var pending = edited
+        var lightingFields = [1, 2, 5, 6, 7, 8]
+        if let start = solid.keyboardModeColorOffset {
+          lightingFields += Array(start + 1..<start + 5)
+        }
+        for index in lightingFields { pending.configuration[index] = verified.configuration[index] }
+        self.original = verified
+        self.edited = pending
+        status =
+          changed
+          ? "Color aplicado · quedan otros cambios pendientes."
+          : "Color fijo guardado y verificado."
+      } catch {
+        self.error = error.localizedDescription
+        status = "No se confirmó el cambio de color. Volvé a leer el dispositivo."
+      }
+    }
+  }
 
   func discard() { edited = original }
   func openInputSettings() { system.openInputSettings() }

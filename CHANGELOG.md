@@ -1,5 +1,14 @@
 # Cambios
 
+## 0.2.1 · corrección de iluminación
+
+- Se corrige el registro de color independiente de cada efecto del teclado. Cambiar sólo el RGB general dejaba el color efectivo sin actualizar.
+- El azul fijo se confirmó visualmente en el K628 real; después se restauró y verificó la configuración previa.
+- Se agregan colores rápidos que activan Color fijo y aplican sólo la iluminación en un clic, conservando otros cambios pendientes.
+- El selector muestra el color y el estado Multicolor del registro efectivo.
+- Los controles avanzados y los colores por tecla se agrupan para simplificar la pantalla.
+- Once comprobaciones locales cubren el protocolo, los respaldos, el gráfico físico y la regresión del color por efecto.
+
 ## 0.2.0 · versión preliminar
 
 - Se agregaron dibujos interactivos del teclado y mouse, y el teclado visual para elegir colores por tecla.

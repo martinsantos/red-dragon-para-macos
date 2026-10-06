@@ -182,6 +182,35 @@ final class ProtocolChecks {
     expectEqual(loaded.sameContents(as: snapshot), true)
     expectEqual(loaded.endpoint, snapshot.endpoint)
   }
+  func testSolidColorUpdatesEffectRecordAndPreservesOtherSettings() throws {
+    let endpoint = Endpoint(registryID: 1, productID: 0x50b8, target: 1, product: "Receiver")
+    var caps = [UInt8](repeating: 0, count: 34)
+    caps[8] = 2
+    var snapshot = Snapshot(
+      endpoint: endpoint, capabilities: caps, configuration: [UInt8](repeating: 7, count: 99),
+      keymap: [UInt8](repeating: 0, count: 384))
+    snapshot.configuration[1] = 2
+    snapshot.configuration[2] = 0
+    let before = snapshot.configuration
+    try snapshot.setSolidColor([0, 0, 255])
+    expectEqual(snapshot.configuration[1], 6)
+    expectEqual(snapshot.configuration[2], 4)
+    expectEqual(snapshot.configuration[5], 0)
+    expectEqual(snapshot.keyboardModeColorOffset, 49)
+    expectEqual(Array(snapshot.configuration[49..<54]), [7, 0, 0, 0, 255])
+    expectEqual(snapshot.lightingRGB, [0, 0, 255])
+    expectEqual(snapshot.lightingIsMulticolor, false)
+    let changed = Set([1, 2, 5, 6, 7, 8, 50, 51, 52, 53])
+    for i in before.indices where !changed.contains(i) {
+      expectEqual(snapshot.configuration[i], before[i])
+    }
+    snapshot.capabilities[8] = 1
+    let mouseBefore = snapshot.configuration
+    try snapshot.setSolidColor([255, 0, 0])
+    expectEqual(snapshot.configuration[1], 3)
+    expectEqual(snapshot.lightingRGB, [255, 0, 0])
+    expectEqual(Array(snapshot.configuration[29..<94]), Array(mouseBefore[29..<94]))
+  }
 
 }
 
@@ -206,4 +235,5 @@ try checks.testMacroWireFormatBalancedKeysAndOpaqueFields()
 try checks.testCustomColorPreservesOtherKeysAndSelectsBank()
 try checks.testImportedSnapshotValidationAndRestore()
 try checks.testSnapshotFileRoundTrip()
-print("PASS: 10 protocol, backup and physical-layout checks.")
+try checks.testSolidColorUpdatesEffectRecordAndPreservesOtherSettings()
+print("PASS: 11 protocol, backup, lighting and physical-layout checks.")

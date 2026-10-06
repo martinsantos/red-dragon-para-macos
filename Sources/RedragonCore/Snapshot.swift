@@ -68,6 +68,39 @@ public struct Snapshot: Codable, Sendable {
     configuration[1] = 19
     configuration[22] = 0
   }
+  public mutating func setSolidColor(_ rgb: [UInt8]) throws {
+    guard configuration.count == 99, rgb.count == 3 else {
+      throw S136Error.message("Elegí un color RGB válido.")
+    }
+    configuration[1] = isKeyboard ? 6 : 3
+    configuration[5] = 0
+    if configuration[2] == 0 { configuration[2] = 4 }
+    configuration.replaceSubrange(6..<9, with: rgb)
+    synchronizeLightingColor()
+  }
+  /// Firmware stores an independent color record for each supported effect.
+  public var keyboardModeColorOffset: Int? {
+    guard isKeyboard, configuration.count == 99 else { return nil }
+    let records = [
+      1: 0, 2: 1, 3: 2, 5: 3, 6: 4, 7: 5, 8: 6, 9: 7, 10: 8, 13: 9, 14: 10, 15: 11, 16: 12,
+    ]
+    return records[Int(configuration[1])].map { 29 + $0 * 5 }
+  }
+  public mutating func synchronizeLightingColor() {
+    guard let start = keyboardModeColorOffset else { return }
+    configuration[start + 1] = configuration[5]
+    let rgb = Array(configuration[6..<9])
+    configuration.replaceSubrange(start + 2..<start + 5, with: rgb)
+  }
+  public var lightingRGB: [UInt8] {
+    guard configuration.count == 99 else { return [0, 0, 0] }
+    if let start = keyboardModeColorOffset { return Array(configuration[start + 2..<start + 5]) }
+    return Array(configuration[6..<9])
+  }
+  public var lightingIsMulticolor: Bool {
+    guard configuration.count == 99 else { return false }
+    return configuration[keyboardModeColorOffset.map { $0 + 1 } ?? 5] != 0
+  }
   public var isKeyboard: Bool { capabilities.count >= 9 && capabilities[8] == 2 }
   public var profile: Int { Int(configuration.first ?? 0) }
   public var keyCount: Int { keymap.count / 3 }
@@ -98,6 +131,7 @@ public struct Snapshot: Codable, Sendable {
     configuration[3] = UInt8(speed)
     configuration[5] = rainbow ? (isKeyboard ? 255 : 1) : 0
     configuration.replaceSubrange(6..<9, with: rgb)
+    synchronizeLightingColor()
   }
   public static let dpiPresets = [800: 6, 1200: 16, 1600: 26, 2400: 46, 7200: 96]
   public func dpi(at index: Int) -> Int {

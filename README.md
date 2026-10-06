@@ -2,7 +2,7 @@
 
 Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693**. Permite leer y guardar ajustes del kit mediante USB HID, con respaldos y verificación de las escrituras.
 
-**Proyecto comunitario independiente, versión preliminar 0.2.0.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
+**Proyecto comunitario independiente, versión preliminar 0.2.1.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
 
 [Descargar versión preliminar](https://github.com/martinsantos/red-dragon-para-macos/releases) · [Validación y protocolo](docs/VALIDATION.md) · [Información para Redragon](docs/REDRAGON-ADOPTION.md)
 
@@ -12,7 +12,7 @@ Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693*
 |---|---|
 | Dibujo interactivo | Teclado de 78 teclas y mouse de siete botones, con selección y función actual |
 | Teclas y botones | Reasignación de teclas, modificadores Mac y siete botones del mouse; Fn se conserva |
-| RGB | Efecto, brillo, velocidad y color; primera paleta personalizada por tecla |
+| RGB | Colores fijos en un clic; azul fijo confirmado visualmente en el K628; efectos y paleta por tecla |
 | DPI | Cinco niveles, con valores 800, 1200, 1600, 2400 o 7200 |
 | Polling USB | 125, 250, 500 o 1000 Hz |
 | Macros experimentales | Editor de pulsaciones, pausas, repetición y asignación; ejecución pendiente |
@@ -22,13 +22,13 @@ Las pruebas de hardware verifican los bytes guardados y restaurados. La lectura 
 
 ## Usar la app
 
-Requiere **macOS 14 o posterior**. La descarga 0.2.0 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
+Requiere **macOS 14 o posterior**. La descarga 0.2.1 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
 
 1. Conectá el receptor USB del kit y encendé el teclado en **2,4 GHz**. Para configurar el mouse en la conexión validada, usá su cable USB.
 2. Abrí `RedragonMac.app`.
 3. En **Ajustes del Sistema → Privacidad y seguridad → Monitoreo de entrada**, agregá y habilitá la app. Puede aparecer como **RED DRAGON PARA MACOS** o **RedragonMac.app**. En **Respaldo** hay botones para abrir el ajuste y mostrar la app en Finder.
 4. Salí con **⌘Q**, volvé a abrirla y pulsá **Detectar**.
-5. Seleccioná el periférico, editá sus ajustes y pulsá **Aplicar al dispositivo**. Antes de releer o cambiar de dispositivo, aplicá o descartá los cambios pendientes.
+5. Seleccioná el periférico. En **Iluminación**, un clic en Azul, Rojo u otro color rápido activa Color fijo y lo guarda directamente. Para otros ajustes, editá y pulsá **Aplicar al dispositivo**. Antes de releer o cambiar de dispositivo, aplicá o descartá los cambios pendientes.
 
 Si aparece `e00002e2` aunque el interruptor esté activado, eliminá la entrada anterior con **−** y agregá de nuevo la app actual con **+**. La recompilación cambia la firma local y el permiso puede seguir asociado al binario anterior. [Permisos de Monitoreo de entrada en macOS](https://support.apple.com/guide/mac-help/mchl4cedafb6/mac).
 
@@ -56,7 +56,7 @@ cd red-dragon-para-macos
 ./script/build_and_run.sh
 ```
 
-`check.sh` compila la app y el CLI, ejecuta diez comprobaciones del protocolo y los respaldos, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
+`check.sh` compila la app y el CLI, ejecuta once comprobaciones del protocolo y los respaldos, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
 
 ```sh
 # Generar un ZIP de la compilación release y su SHA-256.
