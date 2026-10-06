@@ -91,3 +91,5 @@ La prueba visual del usuario mostró que guardar el RGB general no cambiaba la l
 La tabla recuperada de la función 0x4939a0 del programa del fabricante es efecto→registro: 1→0, 2→1, 3→2, 5→3, 6→4, 7→5, 8→6, 9→7, 10→8, 13→9, 14→10, 15→11 y 16→12. Los otros efectos no se fuerzan a una posición de esa tabla.
 
 Se repitió la prueba azul fijo, brillo 100%, Multicolor apagado, con el registro corregido. El usuario confirmó «Sí, ahora quedó azul». La prueba temporal restaura y verifica los buffers anteriores. Esta confirma el color fijo azul del teclado en la conexión comprobada; no valida automáticamente todos los efectos, colores por tecla o conexiones.
+
+Después de abrir la app 0.2.1, el usuario también seleccionó Teclado → Iluminación → Azul y confirmó «Sí, desde la app cambia a azul». Se verificó así el recorrido completo del botón SwiftUI, la escritura y el resultado visible en el K628. La revisión automatizada de otras pantallas se interrumpió por un fallo de SkyComputerUseService; sus gráficos compilaron y la correspondencia de las posiciones del teclado pasó la comprobación local.

@@ -13,6 +13,7 @@ The MIT license grants reuse rights subject to retaining the copyright and licen
 - IOKit HID configuration transport, with non-exclusive device access.
 - Current-profile configuration and key/button mapping.
 - Keyboard RGB settings and first per-key custom palette. Fixed blue was visually confirmed on the K628 after correcting its per-effect color record.
+- The user also confirmed fixed blue through the application's one-click color button, validating that specific UI-to-hardware path end to end.
 - Five verified M693 DPI presets and USB polling configuration.
 - Automatic local backup before writes, stale-state checks, readback verification and rollback verification.
 - Macro memory read/write and binding, with a sequence editor that checks balanced press/release events.
