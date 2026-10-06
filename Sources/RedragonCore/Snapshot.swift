@@ -78,6 +78,21 @@ public struct Snapshot: Codable, Sendable {
     configuration.replaceSubrange(6..<9, with: rgb)
     synchronizeLightingColor()
   }
+  /// Changing one key from a global effect initializes the visible palette from
+  /// that effect's configured color, so the other keys do not inherit a stale bank.
+  public mutating func setVisibleKeyColor(_ rgb: [UInt8], at slot: Int) throws {
+    try validateStructure()
+    guard isKeyboard, rgb.count == 3, customColors != nil,
+      KeyboardLayout.keys.contains(where: { $0.slot == slot }) else {
+      throw S136Error.message("Elegí una tecla visible del K628 y un color RGB.")
+    }
+    if configuration[1] != 19 {
+      let base = lightingRGB
+      for key in KeyboardLayout.keys { try setKeyColor(base, at: key.slot) }
+    }
+    try setKeyColor(rgb, at: slot)
+    if configuration[2] == 0 { configuration[2] = 4 }
+  }
   /// Firmware stores an independent color record for each supported effect.
   public var keyboardModeColorOffset: Int? {
     guard isKeyboard, configuration.count == 99 else { return nil }

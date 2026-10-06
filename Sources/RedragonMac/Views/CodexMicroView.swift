@@ -8,19 +8,24 @@ struct CodexMicroView: View {
   @ObservedObject var micro: MicroStore
   @ObservedObject var bridge: MicroBridge
   @ObservedObject var router: LocalCodexRouter
+  let showLighting: () -> Void
   @State private var showConnection = false
 
-  init(store: DeviceStore, micro: MicroStore) {
+  init(store: DeviceStore, micro: MicroStore, showLighting: @escaping () -> Void) {
     self.store = store
     self.micro = micro
     bridge = micro.bridge
     router = micro.router
+    self.showLighting = showLighting
   }
 
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 24) {
         header
+        hardwareBar
+        Text("Estos botones seleccionan la tecla que querés configurar. Para cambiar el RGB del teclado, usá Cambiar luces.")
+          .font(.caption).foregroundStyle(.secondary)
         HStack(alignment: .top, spacing: 22) {
           VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -46,7 +51,6 @@ struct CodexMicroView: View {
           }.frame(maxWidth: .infinity)
           inspector.frame(width: 290)
         }
-        hardwareBar
         Toggle("Luces del teclado según los estados conectados", isOn: $micro.syncLights)
           .disabled(!store.microOwnsSelected || store.previewMode)
           .help("Activa la paleta por tecla de los chats conectados al enrutador.")
@@ -91,8 +95,8 @@ struct CodexMicroView: View {
       }
       Spacer()
       VStack(alignment: .trailing, spacing: 7) {
-        Label(store.microRecovery == nil ? "Skin activa" : "Teclas Micro activas", systemImage: "circle.hexagongrid.fill")
-          .font(.caption.weight(.medium)).foregroundStyle(.mint)
+        Label(store.microHardwareConfirmed ? "Teclado Micro activo" : store.inputAccessDenied ? "Sin acceso al teclado" : "Micro en pantalla", systemImage: "circle.hexagongrid.fill")
+          .font(.caption.weight(.medium)).foregroundStyle(store.microHardwareConfirmed ? Color.mint : .orange)
         Label(router.routes.isEmpty ? bridge.status : "Enrutador local · \(router.threadIDs.count) chat(s)", systemImage: router.routes.isEmpty && !bridge.connected ? "link.badge.plus" : "link")
           .font(.caption).foregroundStyle(.secondary).lineLimit(2).frame(maxWidth: 260, alignment: .trailing)
       }
@@ -200,21 +204,26 @@ struct CodexMicroView: View {
     HStack(spacing: 16) {
       Image(systemName: "keyboard").font(.title2).foregroundStyle(.mint)
       VStack(alignment: .leading, spacing: 5) {
-        Text(store.microRecovery == nil ? "Activá Num 1–6 en tu K628" : "Volvé al teclado cuando quieras").font(.headline)
+        Text(store.inputAccessDenied ? "El teclado está bloqueado por macOS" : store.microRecovery == nil ? "Control del teclado K628" : "Teclado en modo Micro").font(.headline)
         Text(store.microRecovery == nil
-          ? "Se guardan tus ajustes antes de asignar las seis teclas y su paleta."
+          ? (store.inputAccessDenied ? "Renová el permiso de esta versión para cambiar sus luces y teclas." : "Cambiar luces abre los colores del teclado. Activar Micro asigna las seis teclas y su paleta.")
           : "Las funciones quedan en el hardware. Dejá la app abierta para los chats conectados y las prefunciones.")
           .font(.caption).foregroundStyle(.secondary)
         if store.changed { Text("Aplicá o descartá los cambios pendientes antes de activar Micro.").font(.caption).foregroundStyle(.orange) }
         if store.previewMode { Text("Vista previa · no se puede activar el hardware.").font(.caption).foregroundStyle(.orange) }
       }
       Spacer()
+      Button("Cambiar luces", action: showLighting).disabled(store.busy)
       if store.microRecovery == nil {
-        Button("Activar en teclado") {
-          if !router.routes.isEmpty { micro.syncLights = true }
-          store.activateMicro(micro.bindings)
+        if store.inputAccessDenied {
+          Button("Habilitar acceso") { store.openInputSettings() }.buttonStyle(.borderedProminent)
+        } else {
+          Button("Activar Micro en teclado") {
+            if !router.routes.isEmpty { micro.syncLights = true }
+            store.activateMicro(micro.bindings)
+          }
+            .buttonStyle(.borderedProminent).tint(.mint).disabled(!store.canActivateMicro)
         }
-          .buttonStyle(.borderedProminent).tint(.mint).disabled(!store.canActivateMicro)
       } else {
         VStack(alignment: .trailing, spacing: 8) {
           Button("Volver al teclado normal") { micro.syncLights = false; store.restoreMicro() }

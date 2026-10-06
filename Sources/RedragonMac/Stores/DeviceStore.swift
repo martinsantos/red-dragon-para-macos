@@ -206,6 +206,43 @@ final class DeviceStore: ObservableObject {
 
   func discard() { edited = original }
 
+  func applyKeyColor(_ rgb: [UInt8], at slot: Int) {
+    guard !busy, !microOwnsSelected, let original, let edited else { return }
+    if previewMode {
+      edit { try $0.setVisibleKeyColor(rgb, at: slot) }
+      status = "Vista previa del color de la tecla · sin escrituras al dispositivo."
+      return
+    }
+    var planned = original
+    do { try planned.setVisibleKeyColor(rgb, at: slot) } catch {
+      self.error = error.localizedDescription
+      return
+    }
+    busy = true
+    error = nil
+    status = "Aplicando color a \(KeyCatalog.physicalName(slot: slot, keyboard: true))…"
+    Task {
+      defer { busy = false }
+      do {
+        backupURL = try backups.save(original)
+        let verified = try await controller.apply(original: original, edited: planned)
+        var pending = edited
+        for index in [1, 2, 22] { pending.configuration[index] = verified.configuration[index] }
+        if var colors = pending.customColors, let before = original.customColors,
+           let after = verified.customColors {
+          for index in after.indices where before[index] != after[index] { colors[index] = after[index] }
+          pending.customColors = colors
+        }
+        self.original = verified
+        self.edited = pending
+        status = changed ? "Color de tecla aplicado · quedan otros cambios pendientes." : "Color de tecla guardado y verificado por USB."
+      } catch {
+        self.error = error.localizedDescription
+        status = "No se confirmó el color de la tecla. Volvé a leer el dispositivo."
+      }
+    }
+  }
+
   func activateMicro(_ bindings: [MicroBinding]) {
     guard canActivateMicro, let original else { return }
     busy = true

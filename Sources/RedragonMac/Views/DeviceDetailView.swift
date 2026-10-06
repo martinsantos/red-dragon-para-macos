@@ -47,6 +47,9 @@ private struct DeviceFeatureView: View {
       case .dpi: DPIView(store: store, snapshot: snapshot)
       default: MappingView(store: store, snapshot: snapshot).id(store.selectedID)
       }
+    } else if store.inputAccessDenied {
+      ContentUnavailableView("macOS bloqueó el acceso al teclado", systemImage: "lock.shield",
+        description: Text("Quitá la entrada anterior de esta app en Monitoreo de entrada y agregá esta versión. Después cerrala, reabrila y pulsá Detectar. Los controles de luces aparecerán al leer el dispositivo."))
     } else {
       ContentUnavailableView(
         "Leé el dispositivo", systemImage: "cable.connector",

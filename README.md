@@ -2,7 +2,7 @@
 
 Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693**. Permite leer y guardar ajustes del kit mediante USB HID, con respaldos y verificación de las escrituras.
 
-**Proyecto comunitario independiente, versión preliminar 0.3.1.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
+**Proyecto comunitario independiente, versión preliminar 0.3.2.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
 
 [Descargar versión preliminar](https://github.com/martinsantos/red-dragon-para-macos/releases) · [Validación y protocolo](docs/VALIDATION.md) · [Información para Redragon](docs/REDRAGON-ADOPTION.md)
 
@@ -12,7 +12,7 @@ Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693*
 |---|---|
 | Dibujo interactivo | Teclado de 78 teclas y mouse de siete botones, con selección y función actual |
 | Teclas y botones | Reasignación de teclas, modificadores Mac y siete botones del mouse; Fn se conserva |
-| RGB | Colores fijos en un clic; azul fijo confirmado visualmente en el K628; efectos y paleta por tecla |
+| RGB | Gráfico del teclado, colores en un clic para todo el teclado o una tecla; azul fijo confirmado en 0.2.1, recorrido gráfico nuevo pendiente de prueba visual |
 | DPI | Cinco niveles, con valores 800, 1200, 1600, 2400 o 7200 |
 | Polling USB | 125, 250, 500 o 1000 Hz |
 | Macros experimentales | Editor de pulsaciones, pausas, repetición y asignación; ejecución pendiente |
@@ -24,7 +24,7 @@ Las pruebas de hardware verifican los bytes guardados y restaurados. La lectura 
 
 ## Usar la app
 
-Requiere **macOS 14 o posterior**. La descarga 0.3.1 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
+Requiere **macOS 14 o posterior**. La descarga 0.3.2 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
 
 1. Conectá el receptor USB del kit y encendé el teclado en **2,4 GHz**. Para configurar el mouse en la conexión validada, usá su cable USB.
 2. Abrí `RedragonMac.app`.
@@ -42,7 +42,8 @@ La interfaz de configuración descarta los informes normales de teclas y movimie
 
 La app usa **una sola ventana**. En la barra superior, el selector **Normal / Codex Micro** cambia de modo dentro de esa ventana. Volver a Normal restaura primero las teclas Micro si están activas. Abrir la app de nuevo enfoca la instancia existente. La skin se puede usar sin modificar el teclado.
 
-- Seis botones corresponden a **Num 1–6**, con el orden físico 4/5/6 arriba y 1/2/3 abajo.
+- Seis botones corresponden a **Num 1–6**, con el orden físico 4/5/6 arriba y 1/2/3 abajo. Un clic selecciona el botón para configurar su acción; no cambia por sí solo una luz física.
+- **Cambiar luces** abre los controles de iluminación dentro de la misma ventana. El bloque de activación del teclado queda arriba. **Micro en pantalla** y **Teclado Micro activo** distinguen la interfaz del control físico.
 - Elegí una acción: abrir un chat reciente, abrir el chat local conectado, copiar una prefunción editable o **solo indicador**, sin enviar inputs.
 - **Conectar chat local…** enlaza un archivo `rollout-*.jsonl` de `~/.codex/sessions` con el botón seleccionado. Lee el registro cada segundo y conserva solo su identificador, estado y fecha de evento. Los archivos y las rutas quedan en esta Mac.
 - Azul indica tarea iniciada, ámbar una pregunta pendiente registrada y verde una tarea terminada. El adaptador muestra el **último estado observado**: no inventa errores, aprobaciones ni actividad que el registro no exponga. Este formato local depende de la versión de Codex y puede requerir adaptación tras una actualización.
@@ -81,7 +82,7 @@ cd red-dragon-para-macos
 ./script/build_and_run.sh
 ```
 
-`check.sh` compila la app y el CLI, ejecuta catorce comprobaciones del protocolo, los respaldos y el enrutador local, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
+`check.sh` compila la app y el CLI, ejecuta quince comprobaciones del protocolo, los respaldos y el enrutador local, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
 
 ```sh
 # Generar un ZIP de la compilación release y su SHA-256.

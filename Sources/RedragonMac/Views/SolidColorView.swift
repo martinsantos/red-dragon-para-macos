@@ -6,6 +6,7 @@ import SwiftUI
 struct SolidColorView: View {
   let snapshot: Snapshot
   @ObservedObject var store: DeviceStore
+  let selectedKey: Int?
   @State private var color: Color
 
   private let presets: [(String, [UInt8])] = [
@@ -14,27 +15,31 @@ struct SolidColorView: View {
     ("Rosa", [255, 0, 100]), ("Blanco", [255, 255, 255]),
   ]
 
-  init(snapshot: Snapshot, store: DeviceStore) {
+  init(snapshot: Snapshot, store: DeviceStore, selectedKey: Int? = nil) {
     self.snapshot = snapshot
     self.store = store
+    self.selectedKey = selectedKey
+    let rgb = (snapshot.configuration[1] == 19 ? selectedKey : nil).flatMap { slot in
+      snapshot.customColors.map { Array($0[slot * 3..<slot * 3 + 3]) }
+    } ?? snapshot.lightingRGB
     _color = State(
       initialValue: Color(
-        red: Double(snapshot.lightingRGB[0]) / 255, green: Double(snapshot.lightingRGB[1]) / 255,
-        blue: Double(snapshot.lightingRGB[2]) / 255))
+        red: Double(rgb[0]) / 255, green: Double(rgb[1]) / 255,
+        blue: Double(rgb[2]) / 255))
   }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
-      Text("Cambiar el color en un clic").font(.title2.weight(.semibold))
+      Text(selectedKey.map { "Color de \(KeyCatalog.physicalName(slot: $0, keyboard: true))" } ?? "Cambiar el color en un clic").font(.title2.weight(.semibold))
       Text(
-        "Elegí un color: la app activa Color fijo, apaga Multicolor y lo guarda en el \(snapshot.isKeyboard ? "teclado" : "mouse")."
+        selectedKey == nil ? "Elegí un color: la app activa Color fijo, apaga Multicolor y lo guarda en el \(snapshot.isKeyboard ? "teclado" : "mouse")." : "Elegí un color y se aplica a esta tecla. Al pasar a Personalizado, el resto conserva el color configurado del efecto anterior."
       ).foregroundStyle(.secondary)
       LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 10)], spacing: 10) {
         ForEach(presets, id: \.0) { name, rgb in
           Button {
             color = Color(
               red: Double(rgb[0]) / 255, green: Double(rgb[1]) / 255, blue: Double(rgb[2]) / 255)
-            store.applySolidColor(rgb)
+            apply(rgb)
           } label: {
             VStack(spacing: 8) {
               RoundedRectangle(cornerRadius: 8).fill(
@@ -54,7 +59,7 @@ struct SolidColorView: View {
         Spacer()
         Button("Usar este color") {
           guard let c = NSColor(color).usingColorSpace(.sRGB) else { return }
-          store.applySolidColor(
+          apply(
             [c.redComponent, c.greenComponent, c.blueComponent].map {
               UInt8(max(0, min(255, ($0 * 255).rounded())))
             })
@@ -65,5 +70,9 @@ struct SolidColorView: View {
           .foregroundStyle(.secondary)
       }
     }
+  }
+  private func apply(_ rgb: [UInt8]) {
+    if let selectedKey { store.applyKeyColor(rgb, at: selectedKey) }
+    else { store.applySolidColor(rgb) }
   }
 }

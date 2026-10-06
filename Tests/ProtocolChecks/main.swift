@@ -257,6 +257,32 @@ func checkMicroProfileAndRecovery() throws {
   expectEqual(try CodexMicroProfile.restore(baseline: baseline, installed: lit, current: lit).sameContents(as: baseline), true)
 }
 
+func checkSingleKeyLightingFromGlobalEffect() throws {
+  var baseline = microFixture()
+  baseline.configuration[2] = 0
+  try baseline.setSolidColor([0, 0, 255])
+  baseline.configuration[2] = 0
+  var changed = baseline
+  try changed.setVisibleKeyColor([0, 255, 0], at: 63)
+  expectEqual(changed.configuration[1], 19)
+  expectEqual(changed.configuration[2], 4)
+  expectEqual(changed.configuration[22], 0)
+  expectEqual(changed.keymap, baseline.keymap)
+  expectEqual(changed.macroData, baseline.macroData)
+  for slot in 0..<128 {
+    let rgb = Array(changed.customColors![slot * 3..<slot * 3 + 3])
+    let expected: [UInt8] = slot == 63 ? [0, 255, 0]
+      : KeyboardLayout.keys.contains(where: { $0.slot == slot }) ? [0, 0, 255] : [20, 20, 20]
+    expectEqual(rgb, expected)
+  }
+  for index in baseline.configuration.indices where ![1, 2, 22].contains(index) {
+    expectEqual(changed.configuration[index], baseline.configuration[index])
+  }
+  try changed.setVisibleKeyColor([255, 0, 0], at: 83)
+  expectEqual(Array(changed.customColors![63 * 3..<63 * 3 + 3]), [0, 255, 0])
+  expectFailure(try changed.setVisibleKeyColor([1, 2, 3], at: 99))
+}
+
 func checkLocalCodexStateReducer() throws {
   var state = CodexRolloutState()
   func consume(_ type: String, _ payload: [String: Any]) throws {
@@ -334,6 +360,7 @@ try checks.testImportedSnapshotValidationAndRestore()
 try checks.testSnapshotFileRoundTrip()
 try checks.testSolidColorUpdatesEffectRecordAndPreservesOtherSettings()
 try checkMicroProfileAndRecovery()
+try checkSingleKeyLightingFromGlobalEffect()
 try checkLocalCodexStateReducer()
 try await checkLocalReaderPartialLinesAndTruncation()
-print("PASS: 14 protocol, backup, lighting, Micro profile and local router checks.")
+print("PASS: 15 protocol, backup, lighting, Micro profile and local router checks.")

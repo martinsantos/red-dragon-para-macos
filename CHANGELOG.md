@@ -1,5 +1,16 @@
 # Cambios
 
+## 0.3.2 · acceso claro a las luces
+
+- Control y activación del teclado visibles arriba en modo Micro.
+- Cambiar luces abre Iluminación dentro de la misma ventana.
+- El estado diferencia Micro en pantalla, acceso bloqueado y teclado Micro activo.
+- Se aclara que los botones seleccionan una tecla para configurarla; no aplican RGB al hacer clic.
+- Normal abre inicialmente Iluminación.
+- Gráfico del teclado con selector Todo el teclado / Una tecla y aplicación directa de colores.
+- Al personalizar una tecla desde un efecto global, el resto de teclas visibles conserva su color configurado; se preservan posiciones internas, mapa y macros.
+- Quince comprobaciones locales incluyen esta transición de paleta.
+
 ## 0.3.1 · una ventana, dos modos
 
 - Una única escena Window reemplaza a WindowGroup; se elimina Nueva ventana.

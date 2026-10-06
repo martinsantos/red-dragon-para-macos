@@ -3,7 +3,7 @@ import RedragonCore
 import SwiftUI
 
 struct KeyboardDiagram: View {
-  enum Mode { case mapping, colors }
+  enum Mode { case mapping, colors, lighting }
   let snapshot: Snapshot
   var mode = Mode.mapping
   @Binding var selectedSlot: Int
@@ -22,7 +22,7 @@ struct KeyboardDiagram: View {
           }
         }
       }.frame(height: CGFloat(KeyboardLayout.rowCount) * 47 + 15)
-      Text("Tocá una tecla en el dibujo. Abajo podés revisar su función y cambiarla.")
+      Text(mode == .lighting ? "Tocá una tecla y elegí un color abajo. El dibujo muestra los ajustes de color; los efectos animados se representan con su color configurado." : "Tocá una tecla en el dibujo. Abajo podés revisar su función y cambiarla.")
         .font(.caption).foregroundStyle(.secondary)
     }
     .accessibilityElement(children: .contain)
@@ -33,7 +33,7 @@ struct KeyboardDiagram: View {
     let selected = key.slot == selectedSlot
     let rgb = keyRGB(key.slot)
     let foreground: Color =
-      mode == .colors
+      mode != .mapping
       ? (rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722 > 0.5 ? .black : .white) : .primary
     return Button {
       selectedSlot = key.slot
@@ -45,7 +45,7 @@ struct KeyboardDiagram: View {
       .foregroundStyle(foreground)
       .background(
         RoundedRectangle(cornerRadius: 6).fill(
-          mode == .colors
+          mode != .mapping
             ? Color(red: rgb[0], green: rgb[1], blue: rgb[2])
             : selected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.06))
       )
@@ -65,6 +65,9 @@ struct KeyboardDiagram: View {
   }
 
   private func keyRGB(_ slot: Int) -> [Double] {
+    if mode == .lighting && snapshot.configuration[1] != 19 {
+      return snapshot.lightingRGB.map { Double($0) / 255 }
+    }
     guard let colors = snapshot.customColors, slot * 3 + 2 < colors.count else { return [0, 0, 0] }
     return colors[slot * 3..<slot * 3 + 3].map { Double($0) / 255 }
   }

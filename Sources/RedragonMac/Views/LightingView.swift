@@ -6,12 +6,23 @@ import SwiftUI
 struct LightingView: View {
   @ObservedObject var store: DeviceStore
   let snapshot: Snapshot
+  @State private var selectedSlot = 0
+  @State private var singleKey = false
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
-      if !snapshot.isKeyboard {
+      if snapshot.isKeyboard {
+        Picker("Cambiar color", selection: $singleKey) {
+          Text("Todo el teclado").tag(false)
+          Text("Una tecla").tag(true)
+        }.pickerStyle(.segmented).frame(maxWidth: 350)
+        KeyboardDiagram(snapshot: snapshot, mode: .lighting, selectedSlot: Binding(
+          get: { singleKey ? selectedSlot : -1 },
+          set: { selectedSlot = $0; singleKey = true }))
+      } else {
         MouseDiagram(snapshot: snapshot, lighting: true, selectedSlot: .constant(-1))
       }
-      SolidColorView(snapshot: snapshot, store: store).id(store.selectedID)
+      SolidColorView(snapshot: snapshot, store: store, selectedKey: snapshot.isKeyboard && singleKey ? selectedSlot : nil)
+        .id("\(store.selectedID ?? "")-\(singleKey ? selectedSlot : -1)")
       DisclosureGroup("Más efectos, brillo y velocidad") {
         Form {
           Section("Iluminación del \(snapshot.isKeyboard ? "teclado" : "mouse")") {

@@ -4,8 +4,9 @@ import SwiftUI
 struct ContentView: View {
   @ObservedObject var store: DeviceStore
   @StateObject private var micro = MicroStore(preview: CommandLine.arguments.contains("--micro-preview"))
-  @State private var section = AppSection.mapping
+  @State private var section = AppSection.lighting
   @State private var turnOffAfterRestore = false
+  @State private var normalSection = AppSection.lighting
 
   var body: some View {
     NavigationSplitView {
@@ -24,7 +25,10 @@ struct ContentView: View {
           Divider()
         }
         if micro.skinEnabled {
-          CodexMicroView(store: store, micro: micro)
+          CodexMicroView(store: store, micro: micro, showLighting: {
+            normalSection = .lighting
+            toggleSkin(false)
+          })
         } else {
           DeviceDetailView(section: section, store: store)
         }
@@ -54,7 +58,7 @@ struct ContentView: View {
     .onChange(of: store.microRecovery?.bindings) { _, bindings in
       if bindings == nil && turnOffAfterRestore {
         micro.skinEnabled = false
-        section = .mapping
+        section = normalSection
         turnOffAfterRestore = false
       }
     }
@@ -93,6 +97,6 @@ struct ContentView: View {
       return
     }
     micro.skinEnabled = enabled
-    section = enabled ? .micro : .mapping
+    section = enabled ? .micro : normalSection
   }
 }
