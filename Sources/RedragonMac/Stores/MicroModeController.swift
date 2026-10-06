@@ -9,6 +9,8 @@ final class MicroModeController: ObservableObject {
   let store: DeviceStore
   let micro: MicroStore
   let notifications: MicroNotifications
+  var controlHandler: ((MicroCommand) async -> MicroControlResponse)?
+  var externalTransitioning = false
   @Published private(set) var transitioning = false
   @Published private(set) var requestedMode: Bool?
   @Published private(set) var shortcutMessage = "Atajo global: ⌃⌥⌘C"
@@ -62,7 +64,7 @@ final class MicroModeController: ObservableObject {
         return MicroControlResponse(ok: false, status: .init(hardwareActive: false,
           recoveryPending: false, skinVisible: false, busy: false, message: "App cerrada."), error: "App cerrada.")
       }
-      return await self.execute(command)
+      return await self.dispatch(command)
     }
     do { try channel.start(); server = channel }
     catch { commandMessage = error.localizedDescription }
@@ -96,9 +98,15 @@ final class MicroModeController: ObservableObject {
     if target == false { micro.syncLights = false }
     if !transitioning { registerActions(); synchronizeLights() }
   }
+  private func dispatch(_ command: MicroCommand) async -> MicroControlResponse {
+    if let controlHandler { return await controlHandler(command) }
+    return await execute(command)
+  }
   func perform(_ command: MicroCommand) {
     Task {
-      let response = await execute(command)
+      let response: MicroControlResponse
+      if let controlHandler { response = await controlHandler(command) }
+      else { response = await execute(command) }
       if !response.ok { store.error = response.error; showWindow() }
     }
   }
@@ -182,7 +190,7 @@ final class MicroModeController: ObservableObject {
   }
   func dismissAttention() { notifications.clear(attentionNumbers); attentionNumbers = [] }
   private func synchronizeLights() {
-    guard !transitioning, micro.syncLights, store.canRestoreMicro, store.error == nil,
+    guard !externalTransitioning, !transitioning, micro.syncLights, store.canRestoreMicro, store.error == nil,
       store.microRecovery?.bindings == micro.bindings, let current = store.original,
       let planned = try? CodexMicroProfile.withStates(micro.hardwareStates, on: current),
       !current.sameContents(as: planned) else { return }

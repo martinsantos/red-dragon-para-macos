@@ -1,5 +1,15 @@
 # Cambios
 
+## 0.5.0 · skins y accesos globales
+
+- Panel único Normal / Codex Micro / Boca / Música, atajo ⌘⌥F4, aviso del nombre y comandos skin.
+- F1 Codex, F2 Claude, F3 recorre ventanas de Chrome con Accesibilidad y F4 WhatsApp; apps configurables y interruptor independiente.
+- Boca usa la paleta persistente y modo Personalizado; recuperación antes de escribir y restauración al volver a Normal o salir.
+- RGB temporal 0x12 y modo de computadora 29 quedan experimentales: las pruebas por receptor no acreditaron un cambio visible y requieren validación por cable.
+- Captura opcional del audio del sistema, 18 bandas, ondas y silencio; sin grabaciones, video ni micrófono.
+- Estados Codex en la paleta verificada, colores para los accesos F1–F4, cola de skins y retorno seguro durante operaciones.
+- Veintidós comprobaciones cubren transiciones repetidas, audio sintético, conservación de teclas y recuperación selectiva.
+
 ## 0.4.1 · volver a Normal durante una escritura
 
 - Las órdenes de modo esperan la escritura en curso y se ejecutan en orden; la sincronización automática de luces se pausa mientras haya órdenes pendientes.

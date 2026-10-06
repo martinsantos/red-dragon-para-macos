@@ -1,24 +1,27 @@
 // SPDX-License-Identifier: MIT
 import SwiftUI
+import RedragonCore
 
 struct ContentView: View {
+  @ObservedObject var skins: KeyboardSkinController
   @ObservedObject var mode: MicroModeController
   @ObservedObject var store: DeviceStore
   @ObservedObject var micro: MicroStore
   @State private var section = AppSection.lighting
   @State private var normalSection = AppSection.lighting
 
-  init(mode: MicroModeController) {
-    self.mode = mode
-    store = mode.store
-    micro = mode.micro
+  init(skins: KeyboardSkinController) {
+    self.skins = skins
+    mode = skins.mode
+    store = skins.store
+    micro = skins.mode.micro
   }
 
   var body: some View {
     NavigationSplitView {
       DeviceSidebar(
         endpoints: store.endpoints, selectedID: store.selectedID,
-        section: $section, canSelect: store.canRead, select: store.select)
+        section: $section, canSelect: store.canRead && !skins.busy, select: store.select)
     } detail: {
       VStack(alignment: .leading, spacing: 0) {
         if !mode.attentionNumbers.isEmpty {
@@ -41,10 +44,19 @@ struct ContentView: View {
           }.padding(14).background(Color.orange.opacity(0.08))
           Divider()
         }
-        if micro.skinEnabled {
+        if !skins.galleryVisible, !micro.skinEnabled, skins.active != .normal {
+          HStack {
+            Label("Skin \(skins.active.title) · volvé a Normal para editar las luces", systemImage: "paintpalette")
+            Spacer(); Button("Normal · restaurar") { skins.select(.normal) }.disabled(!skins.canSwitch)
+          }.padding(14).background(Color.orange.opacity(0.08))
+        }
+        if skins.galleryVisible {
+          SkinGalleryView(skins: skins)
+        } else if micro.skinEnabled {
           CodexMicroView(store: store, micro: micro, mode: mode, showLighting: {
             normalSection = .lighting
-            toggleSkin(false)
+            skins.galleryVisible = false
+            skins.select(.normal)
           })
         } else {
           DeviceDetailView(section: section, store: store)
@@ -57,30 +69,39 @@ struct ContentView: View {
     }
     .toolbar {
       ToolbarItem {
-        Button(mode.wantsMicro ? "Desactivar Codex Micro" : "Activar Codex Micro") {
-          mode.perform(mode.wantsMicro ? .off : .on)
-        }.disabled(!mode.canSwitch).help("⌃⌥⌘C · activa o restaura el teclado")
+        Button("Skins") { skins.galleryVisible = true }
       }
       ToolbarItem {
-        Picker("Modo", selection: Binding(get: { micro.skinEnabled }, set: toggleSkin)) {
-          Text("Normal").tag(false)
-          Text("Codex Micro").tag(true)
-        }.pickerStyle(.segmented).frame(width: 225).help("Cambiar de modo dentro de esta ventana")
+        Picker("Skin activa", selection: Binding(get: { skins.active }, set: { skins.select($0) })) {
+          ForEach(KeyboardSkin.allCases) { skin in Text(skin.title).tag(skin) }
+        }.frame(width: 165).disabled(!skins.canSwitch)
+      }
+      ToolbarItem {
+        Button("Normal · restaurar") { skins.select(.normal) }.disabled(!skins.canSwitch)
       }
       DeviceToolbar(
-        canRead: store.canRead, hasSelection: store.selectedEndpoint != nil,
+        canRead: store.canRead && !skins.busy, hasSelection: store.selectedEndpoint != nil,
         detect: store.detect, read: store.read)
     }
-    .preferredColorScheme(micro.skinEnabled ? .dark : nil)
-    .task {
-      if micro.skinEnabled || store.microRecovery != nil { micro.skinEnabled = true; section = .micro }
-      mode.start()
+    .overlay(alignment: .top) {
+      if let notice = skins.notice {
+        Text(notice).font(.headline).padding(.horizontal, 22).padding(.vertical, 12)
+          .background(.regularMaterial, in: Capsule()).shadow(radius: 8).padding(.top, 8)
+          .allowsHitTesting(false).accessibilityLabel(notice)
+      }
     }
-    .onChange(of: micro.skinEnabled) { _, enabled in section = enabled ? .micro : normalSection }
+    .preferredColorScheme(.dark)
+    .task {
+      section = .skins
+      skins.start()
+    }
+    .onChange(of: micro.skinEnabled) { _, enabled in
+      if !skins.galleryVisible { section = enabled ? .micro : normalSection }
+    }
     .onChange(of: section) { _, section in
-      if section == .micro { micro.skinEnabled = true }
-      else if store.microRecovery == nil { micro.skinEnabled = false }
-      else { self.section = .micro }
+      if section == .skins { skins.galleryVisible = true }
+      else if section == .micro { skins.galleryVisible = false; micro.skinEnabled = true }
+      else { skins.galleryVisible = false; micro.skinEnabled = false }
     }
     .alert(
       store.needsInputPermission ? "Habilitá el acceso al kit" : "No se pudo completar",
@@ -98,12 +119,4 @@ struct ContentView: View {
     }
   }
 
-  private func toggleSkin(_ enabled: Bool) {
-    if !enabled, store.microRecovery != nil {
-      mode.perform(.off)
-      return
-    }
-    micro.skinEnabled = enabled
-    section = enabled ? .micro : normalSection
-  }
 }

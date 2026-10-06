@@ -101,6 +101,23 @@ public actor HardwareController {
         "\(failure.localizedDescription) Se restauraron y verificaron los ajustes originales.")
     }
   }
+  /// Firmware's live RGB buffer (0x12), without a configuration transaction or commit.
+  /// The caller must retain a verified K628 snapshot and stop this override before restore.
+  public func sendLiveColors(on known: Snapshot, colors: [UInt8]) throws {
+    try known.validateStructure()
+    guard known.isKeyboard, known.endpoint.productID == 0x50b8, known.endpoint.target == 1,
+          colors.count == 384 else { throw S136Error.message("RGB temporal requiere el K628 reconocido y 128 colores.") }
+    let transport = try HIDTransport(endpoint: known.endpoint)
+    try transport.write(command: 0x12, bytes: colors)
+  }
+  public func stopLiveColors(on known: Snapshot) throws {
+    try known.validateStructure()
+    guard known.isKeyboard, known.endpoint.productID == 0x50b8, known.endpoint.target == 1 else {
+      throw S136Error.message("El canal RGB temporal solo está disponible para el K628 reconocido.")
+    }
+    let transport = try HIDTransport(endpoint: known.endpoint)
+    _ = try transport.query(command: 0x13)
+  }
   private func write(
     _ snapshot: Snapshot, comparedWith previous: Snapshot?, using transport: HIDTransport
   ) throws {
