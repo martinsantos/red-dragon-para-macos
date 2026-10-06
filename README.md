@@ -2,7 +2,7 @@
 
 Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693**. Permite leer y guardar ajustes del kit mediante USB HID, con respaldos y verificación de las escrituras.
 
-**Proyecto comunitario independiente, versión preliminar 0.3.0.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
+**Proyecto comunitario independiente, versión preliminar 0.3.1.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
 
 [Descargar versión preliminar](https://github.com/martinsantos/red-dragon-para-macos/releases) · [Validación y protocolo](docs/VALIDATION.md) · [Información para Redragon](docs/REDRAGON-ADOPTION.md)
 
@@ -24,7 +24,7 @@ Las pruebas de hardware verifican los bytes guardados y restaurados. La lectura 
 
 ## Usar la app
 
-Requiere **macOS 14 o posterior**. La descarga 0.3.0 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
+Requiere **macOS 14 o posterior**. La descarga 0.3.1 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
 
 1. Conectá el receptor USB del kit y encendé el teclado en **2,4 GHz**. Para configurar el mouse en la conexión validada, usá su cable USB.
 2. Abrí `RedragonMac.app`.
@@ -40,7 +40,7 @@ La interfaz de configuración descarta los informes normales de teclas y movimie
 
 ## Modo Codex Micro
 
-Pulsá **Codex Micro** en la barra superior para activar la skin. **Modo normal** vuelve a la interfaz anterior; si las teclas Micro están activas, primero restaura sus ajustes. La skin se puede usar sin modificar el teclado.
+La app usa **una sola ventana**. En la barra superior, el selector **Normal / Codex Micro** cambia de modo dentro de esa ventana. Volver a Normal restaura primero las teclas Micro si están activas. Abrir la app de nuevo enfoca la instancia existente. La skin se puede usar sin modificar el teclado.
 
 - Seis botones corresponden a **Num 1–6**, con el orden físico 4/5/6 arriba y 1/2/3 abajo.
 - Elegí una acción: abrir un chat reciente, abrir el chat local conectado, copiar una prefunción editable o **solo indicador**, sin enviar inputs.

@@ -103,3 +103,8 @@ Después de abrir la app 0.2.1, el usuario también seleccionó Teclado → Ilum
 - El detector no observó F13 durante la primera prueba de inputs. Se sustituyó por usos HID estándar del pad y un registro Carbon de teclas de acción. Su recorrido completo desde una pulsación física hasta la apertura de un chat o copia de prefunción sigue pendiente de confirmación.
 - La segunda prueba de uso normal restauró el perfil, pero no hubo una pulsación confirmada dentro de su intervalo. El registro Carbon aceptó Num 1, pero su prueba de callback también terminó sin confirmación física. La ausencia de detección no se considera prueba de funcionamiento.
 - El adaptador local depende del formato de eventos observado en esta versión de Codex Desktop. No observa aprobaciones, errores ni actividad ausentes del registro. El conector avanzado de App Server no fue validado contra el servidor privado de la app de escritorio.
+
+
+## Ventana única en 0.3.1
+
+La revisión de la app mostró un único elemento de ventana principal con ID `main`. El selector Normal / Codex Micro cambió el contenido sin cambiar esa identidad de ventana. Se cerraron las instancias de prueba y anteriores. Launch Services prohíbe nuevas instancias y el bloqueo nativo previene duplicados incluso si se ejecuta directamente el binario. Los scripts usan `open` sin `-n`. El permiso de Monitoreo de entrada sigue siendo requerido para el hardware; el enrutador local y la skin funcionan sin él.

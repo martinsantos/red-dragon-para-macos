@@ -1,5 +1,14 @@
 # Cambios
 
+## 0.3.1 · una ventana, dos modos
+
+- Una única escena Window reemplaza a WindowGroup; se elimina Nueva ventana.
+- Selector Normal / Codex Micro en la misma ventana.
+- Launch Services y un bloqueo por proceso previenen instancias duplicadas; al reabrir se enfoca la ventana existente.
+- Los scripts de arranque reutilizan la app en lugar de ejecutar open -n.
+- Cerrar la ventana principal sale de la app.
+- La falta de Monitoreo de entrada se explica dentro de la ventana con un acceso al ajuste, sin abrir un diálogo al arrancar.
+
 ## 0.3.0 · skin Codex Micro y enrutador local
 
 - Skin activable con seis botones del pad numérico y regreso al modo normal.

@@ -18,6 +18,7 @@ final class DeviceStore: ObservableObject {
   @Published private(set) var original: Snapshot?
   @Published private(set) var edited: Snapshot?
   @Published private(set) var busy = false
+  @Published private(set) var inputAccessDenied = false
   @Published private(set) var status = "Detectá el kit para leer su configuración."
   @Published var error: String?
   @Published private(set) var backupURL: URL?
@@ -80,6 +81,7 @@ final class DeviceStore: ObservableObject {
         edited = nil
       }
       busy = false
+      if endpoints.isEmpty { inputAccessDenied = false }
       status =
         endpoints.isEmpty
         ? "Conectá el receptor del S136 o el mouse por USB."
@@ -107,14 +109,16 @@ final class DeviceStore: ObservableObject {
         let snapshot = try await controller.read(endpoint)
         original = snapshot
         edited = snapshot
+        inputAccessDenied = false
         if microOwnsSelected, let recovery = microRecovery {
           microHardwareConfirmed = snapshot.sameContents(as: recovery.installed)
         }
         status =
           "Leído · perfil \(snapshot.profile + 1) · \(snapshot.isKeyboard ? "teclado" : "mouse")"
       } catch {
-        self.error = error.localizedDescription
-        status = "No se pudo leer el dispositivo."
+        inputAccessDenied = error.localizedDescription.contains("e00002e2")
+        self.error = inputAccessDenied ? nil : error.localizedDescription
+        status = inputAccessDenied ? "Habilitá Monitoreo de entrada para configurar el kit." : "No se pudo leer el dispositivo."
       }
     }
   }

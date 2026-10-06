@@ -27,8 +27,9 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>RED DRAGON PARA MACOS</string>
 <key>CFBundleDisplayName</key><string>RED DRAGON PARA MACOS</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.3.0</string>
-<key>CFBundleVersion</key><string>4</string>
+<key>CFBundleShortVersionString</key><string>0.3.1</string>
+<key>CFBundleVersion</key><string>5</string>
+<key>LSMultipleInstancesProhibited</key><true/>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>NSHighResolutionCapable</key><true/>
@@ -38,10 +39,10 @@ PLIST
 codesign --force --sign "${SIGNING_IDENTITY:--}" "$APP_BUNDLE"
 codesign --verify --deep --strict "$APP_BUNDLE"
 case "$MODE" in
-  run) open -n "$APP_BUNDLE" ;;
+  run) open "$APP_BUNDLE" ;;
   --build-only) ;;
-  --preview) open -n "$APP_BUNDLE" --args --preview "$2" ;;
-  --verify) open -n "$APP_BUNDLE"; sleep 1; pgrep -x RedragonMac >/dev/null ;;
+  --preview) open "$APP_BUNDLE" --args --preview "$2" ;;
+  --verify) open "$APP_BUNDLE"; sleep 1; pgrep -x RedragonMac >/dev/null ;;
   --debug) lldb -- "$APP_BUNDLE/Contents/MacOS/RedragonMac" ;;
-  --logs|--telemetry) open -n "$APP_BUNDLE"; log stream --info --style compact --predicate "process == \"RedragonMac\"" ;;
+  --logs|--telemetry) open "$APP_BUNDLE"; log stream --info --style compact --predicate "process == \"RedragonMac\"" ;;
 esac

@@ -49,7 +49,8 @@ final class MicroBridge: ObservableObject {
     receiver = Task { [weak self] in
       do {
         try await self?.send(["id": 0, "method": "initialize", "params": [
-          "clientInfo": ["name": "red_dragon_micro", "title": "Red Dragon Micro Skin", "version": "0.3.0"]]])
+          "clientInfo": ["name": "red_dragon_micro", "title": "Red Dragon Micro Skin",
+                         "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development"]]])
         while !Task.isCancelled {
           let message = try await socket.receive()
           guard let self, self.generation == token else { return }

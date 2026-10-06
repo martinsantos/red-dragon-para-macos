@@ -14,6 +14,15 @@ struct ContentView: View {
         section: $section, canSelect: store.canRead, select: store.select)
     } detail: {
       VStack(alignment: .leading, spacing: 0) {
+        if store.inputAccessDenied {
+          HStack(spacing: 12) {
+            Image(systemName: "lock.shield").foregroundStyle(.orange)
+            Text("Para configurar teclas y luces, habilitá esta app en Monitoreo de entrada.")
+              .font(.callout).frame(maxWidth: .infinity, alignment: .leading)
+            Button("Abrir ajuste") { store.openInputSettings() }
+          }.padding(14).background(Color.orange.opacity(0.08))
+          Divider()
+        }
         if micro.skinEnabled {
           CodexMicroView(store: store, micro: micro)
         } else {
@@ -27,9 +36,10 @@ struct ContentView: View {
     }
     .toolbar {
       ToolbarItem {
-        Button { toggleSkin(!micro.skinEnabled) } label: {
-          Label(micro.skinEnabled ? "Modo normal" : "Codex Micro", systemImage: "circle.hexagongrid")
-        }.help("Activar o desactivar la skin Codex Micro")
+        Picker("Modo", selection: Binding(get: { micro.skinEnabled }, set: toggleSkin)) {
+          Text("Normal").tag(false)
+          Text("Codex Micro").tag(true)
+        }.pickerStyle(.segmented).frame(width: 225).help("Cambiar de modo dentro de esta ventana")
       }
       DeviceToolbar(
         canRead: store.canRead, hasSelection: store.selectedEndpoint != nil,
