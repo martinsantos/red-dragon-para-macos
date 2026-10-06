@@ -2,7 +2,7 @@
 
 Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693**. Permite leer y guardar ajustes del kit mediante USB HID, con respaldos y verificación de las escrituras.
 
-**Proyecto comunitario independiente, versión preliminar 0.3.2.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
+**Proyecto comunitario independiente, versión preliminar 0.4.0.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
 
 [Descargar versión preliminar](https://github.com/martinsantos/red-dragon-para-macos/releases) · [Validación y protocolo](docs/VALIDATION.md) · [Información para Redragon](docs/REDRAGON-ADOPTION.md)
 
@@ -24,7 +24,7 @@ Las pruebas de hardware verifican los bytes guardados y restaurados. La lectura 
 
 ## Usar la app
 
-Requiere **macOS 14 o posterior**. La descarga 0.3.2 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
+Requiere **macOS 14 o posterior**. La descarga 0.4.0 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
 
 1. Conectá el receptor USB del kit y encendé el teclado en **2,4 GHz**. Para configurar el mouse en la conexión validada, usá su cable USB.
 2. Abrí `RedragonMac.app`.
@@ -39,6 +39,22 @@ Los respaldos se guardan en `~/Library/Application Support/RedragonMac/Backups`.
 La interfaz de configuración descarta los informes normales de teclas y movimiento. El modo Micro registra únicamente las teclas de acción asignadas del pad; no guarda pulsaciones. El enrutador conserva identificadores y estados derivados de registros locales, sin exportar conversaciones. El conector avanzado opcional permite observar un App Server en localhost.
 
 ## Modo Codex Micro
+
+**⌃⌥⌘C — Control + Opción + Comando + C** activa o desactiva las funciones del teclado desde cualquier app mientras RED DRAGON PARA MACOS esté abierta. El menú **Codex**, el botón de la barra superior y los comandos usan la misma operación. Activar elige y lee el K628 aunque esté seleccionado el mouse; desactivar restaura primero el respaldo. Si hay cambios pendientes, deben aplicarse o descartarse. La pantalla muestra «Teclado Micro activo» sólo después de confirmar la escritura.
+
+Desde la carpeta del repositorio:
+
+```sh
+./script/codex-mode.sh on       # Activar funciones y luces Micro.
+./script/codex-mode.sh off      # Restaurar el teclado anterior.
+./script/codex-mode.sh toggle   # Alternar.
+./script/codex-mode.sh status   # Consultar el último estado observado por la app.
+./script/codex-mode.sh show     # Mostrar la skin sin activar el hardware.
+```
+
+El script abre la misma app si hace falta. El CLI incluido en el bundle admite `s136ctl micro on|off|toggle|status|show [--json]` y requiere la app abierta. No crea otro controlador de hardware: envía la orden a la instancia existente por un socket local privado del usuario. Un error de comunicación no confirma el resultado; consultá `status` antes de repetir `toggle`. `on` y `off` son idempotentes.
+
+En el panel o menú Codex, activá **Avisarme cuando Codex necesite respuesta** y permití las notificaciones de macOS. Un nuevo pedido registrado por un chat local conectado produce un aviso con **Activar Codex Micro**. El aviso no cambia el modo automáticamente. Se omiten las preguntas antiguas al abrir o conectar un chat y se evitan avisos duplicados; una pregunta nueva puede avisar aunque otra siga pendiente. La app debe estar abierta y el chat conectado al enrutador local. Las aprobaciones ausentes del registro no generan avisos.
 
 La app usa **una sola ventana**. En la barra superior, el selector **Normal / Codex Micro** cambia de modo dentro de esa ventana. Volver a Normal restaura primero las teclas Micro si están activas. Abrir la app de nuevo enfoca la instancia existente. La skin se puede usar sin modificar el teclado.
 
@@ -82,7 +98,7 @@ cd red-dragon-para-macos
 ./script/build_and_run.sh
 ```
 
-`check.sh` compila la app y el CLI, ejecuta quince comprobaciones del protocolo, los respaldos y el enrutador local, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
+`check.sh` compila la app y el CLI, ejecuta diecisiete comprobaciones del protocolo, los respaldos, el enrutador, los avisos y el canal de comandos, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
 
 ```sh
 # Generar un ZIP de la compilación release y su SHA-256.

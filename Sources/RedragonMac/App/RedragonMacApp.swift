@@ -51,14 +51,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct RedragonMacApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-  @StateObject private var store = DeviceStore()
+  @StateObject private var mode = MicroModeController()
   var body: some Scene {
     Window("RED DRAGON PARA MACOS", id: "main") {
-      ContentView(store: store).frame(minWidth: 940, minHeight: 640)
+      ContentView(mode: mode).frame(minWidth: 940, minHeight: 640)
     }.defaultSize(width: 1120, height: 740)
       .commands {
         CommandGroup(replacing: .newItem) {}
-        AppCommands(store: store)
+        AppCommands(store: mode.store, mode: mode)
       }
   }
 }

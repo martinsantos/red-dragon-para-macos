@@ -6,6 +6,23 @@ import RedragonCore
 struct CLI {
   static func main() async {
     do {
+      if CommandLine.arguments.dropFirst().first == "micro" {
+        let arguments = Array(CommandLine.arguments.dropFirst(2))
+        guard let first = arguments.first, let command = MicroCommand(rawValue: first),
+              arguments.dropFirst().allSatisfy({ $0 == "--json" }) else {
+          throw S136Error.message("Uso: s136ctl micro on|off|toggle|status|show [--json]")
+        }
+        let response = try MicroControlSocket.send(command)
+        if arguments.contains("--json") {
+          let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+          print(String(decoding: try encoder.encode(response), as: UTF8.self))
+        } else {
+          print("Micro: \(response.status.hardwareActive ? "ACTIVO" : response.status.recoveryPending ? "RECUPERACIÓN PENDIENTE" : "DESACTIVADO") · \(response.status.message)")
+          if let error = response.error { FileHandle.standardError.write(Data((error + "\n").utf8)) }
+        }
+        if !response.ok { exit(1) }
+        return
+      }
       if CommandLine.arguments.dropFirst().first == "codex-state", CommandLine.arguments.count == 3 {
         let reader = CodexRolloutReader(url: URL(fileURLWithPath: CommandLine.arguments[2]))
         let state = try await reader.read()

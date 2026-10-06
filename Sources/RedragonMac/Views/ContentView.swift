@@ -2,11 +2,17 @@
 import SwiftUI
 
 struct ContentView: View {
+  @ObservedObject var mode: MicroModeController
   @ObservedObject var store: DeviceStore
-  @StateObject private var micro = MicroStore(preview: CommandLine.arguments.contains("--micro-preview"))
+  @ObservedObject var micro: MicroStore
   @State private var section = AppSection.lighting
-  @State private var turnOffAfterRestore = false
   @State private var normalSection = AppSection.lighting
+
+  init(mode: MicroModeController) {
+    self.mode = mode
+    store = mode.store
+    micro = mode.micro
+  }
 
   var body: some View {
     NavigationSplitView {
@@ -15,6 +21,17 @@ struct ContentView: View {
         section: $section, canSelect: store.canRead, select: store.select)
     } detail: {
       VStack(alignment: .leading, spacing: 0) {
+        if !mode.attentionNumbers.isEmpty {
+          HStack {
+            Label("Codex necesita tu respuesta · Num \(mode.attentionNumbers.map(String.init).joined(separator: ", "))", systemImage: "bell.badge")
+            Spacer()
+            Button(store.microRecovery == nil ? "Activar Codex Micro" : "Mostrar Codex") {
+              mode.perform(store.microRecovery == nil ? .on : .show)
+            }.disabled(!mode.canSwitch)
+            Button("Cerrar aviso") { mode.dismissAttention() }
+          }.padding(14).background(Color.orange.opacity(0.08))
+          Divider()
+        }
         if store.inputAccessDenied {
           HStack(spacing: 12) {
             Image(systemName: "lock.shield").foregroundStyle(.orange)
@@ -25,7 +42,7 @@ struct ContentView: View {
           Divider()
         }
         if micro.skinEnabled {
-          CodexMicroView(store: store, micro: micro, showLighting: {
+          CodexMicroView(store: store, micro: micro, mode: mode, showLighting: {
             normalSection = .lighting
             toggleSkin(false)
           })
@@ -40,6 +57,11 @@ struct ContentView: View {
     }
     .toolbar {
       ToolbarItem {
+        Button(store.microRecovery == nil ? "Activar Codex Micro" : "Desactivar Codex Micro") {
+          mode.perform(.toggle)
+        }.disabled(!mode.canSwitch).help("⌃⌥⌘C · activa o restaura el teclado")
+      }
+      ToolbarItem {
         Picker("Modo", selection: Binding(get: { micro.skinEnabled }, set: toggleSkin)) {
           Text("Normal").tag(false)
           Text("Codex Micro").tag(true)
@@ -52,17 +74,9 @@ struct ContentView: View {
     .preferredColorScheme(micro.skinEnabled ? .dark : nil)
     .task {
       if micro.skinEnabled || store.microRecovery != nil { micro.skinEnabled = true; section = .micro }
-      micro.registerHardware(store.microBindingsForHotkeys)
-      store.detect()
+      mode.start()
     }
-    .onChange(of: store.microRecovery?.bindings) { _, bindings in
-      if bindings == nil && turnOffAfterRestore {
-        micro.skinEnabled = false
-        section = normalSection
-        turnOffAfterRestore = false
-      }
-    }
-    .onChange(of: store.microBindingsForHotkeys) { _, bindings in micro.registerHardware(bindings) }
+    .onChange(of: micro.skinEnabled) { _, enabled in section = enabled ? .micro : normalSection }
     .onChange(of: section) { _, section in
       if section == .micro { micro.skinEnabled = true }
       else if store.microRecovery == nil { micro.skinEnabled = false }
@@ -86,14 +100,7 @@ struct ContentView: View {
 
   private func toggleSkin(_ enabled: Bool) {
     if !enabled, store.microRecovery != nil {
-      guard store.canRestoreMicro else {
-        store.error = "Seleccioná el K628 y volvé a leerlo para restaurar las teclas antes de apagar Micro."
-        return
-      }
-      micro.syncLights = false
-      turnOffAfterRestore = true
-      store.restoreMicro()
-      // Keep the recovery controls visible until restoration is confirmed.
+      mode.perform(.off)
       return
     }
     micro.skinEnabled = enabled

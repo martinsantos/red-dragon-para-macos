@@ -16,6 +16,7 @@ struct LocalMicroRoute: Codable, Equatable, Identifiable {
 final class LocalCodexRouter: ObservableObject {
   @Published private(set) var routes: [LocalMicroRoute] = []
   @Published private(set) var states: [Int: MicroState] = [:]
+  @Published private(set) var pendingQuestions: [Int: Set<String>] = [:]
   @Published private(set) var threadIDs: [Int: String] = [:]
   @Published private(set) var eventDates: [Int: Date] = [:]
   @Published private(set) var issues: [Int: String] = [:]
@@ -57,6 +58,7 @@ final class LocalCodexRouter: ObservableObject {
     routes.removeAll { $0.number == number }
     readers[number] = nil
     states[number] = nil
+    pendingQuestions[number] = nil
     threadIDs[number] = nil
     eventDates[number] = nil
     issues[number] = nil
@@ -76,11 +78,13 @@ final class LocalCodexRouter: ObservableObject {
           do {
             let result = try await reader.read()
             guard self.readers[route.number] === reader else { continue }
+            self.pendingQuestions[route.number] = result.pendingQuestions
             self.states[route.number] = result.threadID == nil ? .disconnected : result.state
             self.threadIDs[route.number] = result.threadID
             self.eventDates[route.number] = result.lastEventAt
             self.issues[route.number] = result.threadID == nil ? "No se reconoce como registro de Codex." : nil
           } catch {
+            self.pendingQuestions[route.number] = []
             self.states[route.number] = .disconnected
             self.issues[route.number] = "No se puede leer este chat. Volvé a conectar su archivo."
           }

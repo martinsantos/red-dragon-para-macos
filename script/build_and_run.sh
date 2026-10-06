@@ -4,7 +4,7 @@ MODE="${1:-run}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_CONFIGURATION="${CONFIGURATION:-debug}"
 BUILD_DIR="$ROOT_DIR/work/build"
-APP_BUNDLE="$ROOT_DIR/dist/RedragonMac.app"
+APP_BUNDLE="${APP_BUNDLE:-$ROOT_DIR/dist/RedragonMac.app}"
 BUNDLE_ID="local.redragonmac.S136"
 case "$MODE" in
   run|--build-only|--verify|--debug|--logs|--telemetry|--preview) ;;
@@ -18,6 +18,7 @@ swift build --package-path "$ROOT_DIR" --configuration "$BUILD_CONFIGURATION" --
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 cp "$BUILD_DIR/$BUILD_CONFIGURATION/RedragonMac" "$APP_BUNDLE/Contents/MacOS/RedragonMac.next"
 mv -f "$APP_BUNDLE/Contents/MacOS/RedragonMac.next" "$APP_BUNDLE/Contents/MacOS/RedragonMac"
+cp "$BUILD_DIR/$BUILD_CONFIGURATION/s136ctl" "$APP_BUNDLE/Contents/MacOS/s136ctl"
 cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -27,8 +28,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <key>CFBundleName</key><string>RED DRAGON PARA MACOS</string>
 <key>CFBundleDisplayName</key><string>RED DRAGON PARA MACOS</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.3.2</string>
-<key>CFBundleVersion</key><string>6</string>
+<key>CFBundleShortVersionString</key><string>0.4.0</string>
+<key>CFBundleVersion</key><string>7</string>
 <key>LSMultipleInstancesProhibited</key><true/>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
@@ -36,6 +37,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <key>NSInputMonitoringUsageDescription</key><string>La app utiliza el canal USB de configuración del kit S136 y descarta los informes normales de teclas y movimiento.</string>
 </dict></plist>
 PLIST
+codesign --force --sign "${SIGNING_IDENTITY:--}" "$APP_BUNDLE/Contents/MacOS/s136ctl"
 codesign --force --sign "${SIGNING_IDENTITY:--}" "$APP_BUNDLE"
 codesign --verify --deep --strict "$APP_BUNDLE"
 case "$MODE" in

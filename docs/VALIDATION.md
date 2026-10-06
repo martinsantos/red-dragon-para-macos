@@ -116,3 +116,13 @@ El gráfico permite elegir Todo el teclado o Una tecla. Los ocho colores rápido
 En esta compilación se confirmó que el permiso activado correspondía a otra firma. Con autorización del usuario se reemplazó la entrada mediante Ajustes del Sistema y se comprobó que el permiso autorizado coincidiera con la firma del bundle actual. Tras reiniciar la misma app, desapareció el bloqueo y la interfaz mostró «Leído · perfil 1 · teclado», con los controles habilitados. No se recompiló ni se volvió a firmar el bundle después de renovar el permiso.
 
 La interfaz del mouse USB mostró un color violeta y «Color fijo guardado y verificado» durante la revisión. Esto acredita la confirmación de escritura de la app, sin sustituir una observación física de la luz. La prueba visual del gráfico nuevo en el teclado sigue pendiente: la herramienta de control de interfaz dejó de responder durante la prueba. El azul fijo confirmado desde la app 0.2.1 continúa documentado por separado.
+
+## Atajo, comandos y avisos en 0.4.0
+
+Diecisiete comprobaciones locales y la compilación release aprobaron. Las pruebas nuevas cubren comandos desconocidos y versiones incompatibles, ausencia del servidor, permisos privados y rechazo de enlaces simbólicos del directorio, lectura acotada de mensajes, omisión del historial de avisos y una pregunta nueva mientras otra sigue pendiente.
+
+Se probó el canal local contra la app real: `micro status` consultó el estado; `micro on` devolvió error y `hardwareActive: false` cuando macOS bloqueaba el acceso, sin crear recuperación. Después de renovar el mismo permiso para la firma final, `micro on` activó el teclado, guardó el respaldo y la interfaz mostró «Teclado Micro activo». `micro off` confirmó la restauración y pasó a Normal. Una lectura independiente comparó configuración, mapa, macros y paleta con el respaldo previo: los cuatro buffers coincidieron byte por byte. `micro show` mostró el panel en la misma ventana manteniendo el hardware desactivado.
+
+El atajo global ⌃⌥⌘C se registró sin error con Carbon. La simulación de teclas de la herramienta de interfaz no disparó el atajo; su confirmación desde el teclado físico sigue pendiente. Las teclas físicas Num 1–6 continúan pendientes de validación independiente.
+
+Se habilitó la preferencia de avisos en la app. La entrega del aviso depende del permiso de Notificaciones de macOS; la herramienta de interfaz se interrumpió al revisar ese permiso, por lo que no se considera comprobada la entrega del banner ni su botón de activación. Los avisos requieren el chat local conectado y la app abierta. No activan el teclado ni resuelven aprobaciones automáticamente.

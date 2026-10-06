@@ -8,14 +8,18 @@ struct CodexMicroView: View {
   @ObservedObject var micro: MicroStore
   @ObservedObject var bridge: MicroBridge
   @ObservedObject var router: LocalCodexRouter
+  @ObservedObject var mode: MicroModeController
+  @ObservedObject var notifications: MicroNotifications
   let showLighting: () -> Void
   @State private var showConnection = false
 
-  init(store: DeviceStore, micro: MicroStore, showLighting: @escaping () -> Void) {
+  init(store: DeviceStore, micro: MicroStore, mode: MicroModeController, showLighting: @escaping () -> Void) {
     self.store = store
     self.micro = micro
     bridge = micro.bridge
     router = micro.router
+    self.mode = mode
+    notifications = mode.notifications
     self.showLighting = showLighting
   }
 
@@ -24,6 +28,13 @@ struct CodexMicroView: View {
       VStack(alignment: .leading, spacing: 24) {
         header
         hardwareBar
+        VStack(alignment: .leading, spacing: 8) {
+          Text(mode.shortcutMessage).font(.callout.weight(.medium))
+          Text(mode.commandMessage).font(.caption.monospaced()).foregroundStyle(.secondary)
+          Toggle("Avisarme cuando Codex necesite respuesta", isOn: $mode.noticesEnabled)
+            .disabled(store.previewMode)
+          if mode.noticesEnabled { Text(notifications.permissionMessage).font(.caption).foregroundStyle(.secondary) }
+        }
         Text("Estos botones seleccionan la tecla que querés configurar. Para cambiar el RGB del teclado, usá Cambiar luces.")
           .font(.caption).foregroundStyle(.secondary)
         HStack(alignment: .top, spacing: 22) {
@@ -74,10 +85,6 @@ struct CodexMicroView: View {
       }.padding(28)
     }
     .background(Color(red: 0.045, green: 0.05, blue: 0.07))
-    .onChange(of: micro.hardwareStates) { _, _ in synchronizeLights() }
-    .onChange(of: router.states) { _, _ in synchronizeLights() }
-    .onChange(of: store.busy) { _, busy in if !busy { synchronizeLights() } }
-    .onChange(of: micro.syncLights) { _, _ in synchronizeLights() }
     .alert("Modo Codex Micro", isPresented: Binding(get: { micro.error != nil }, set: { if !$0 { micro.error = nil } })) {
       if micro.error?.contains("Accesibilidad") == true {
         Button("Abrir Accesibilidad") { micro.openAccessibility() }
@@ -219,15 +226,14 @@ struct CodexMicroView: View {
           Button("Habilitar acceso") { store.openInputSettings() }.buttonStyle(.borderedProminent)
         } else {
           Button("Activar Micro en teclado") {
-            if !router.routes.isEmpty { micro.syncLights = true }
-            store.activateMicro(micro.bindings)
+            mode.perform(.on)
           }
-            .buttonStyle(.borderedProminent).tint(.mint).disabled(!store.canActivateMicro)
+            .buttonStyle(.borderedProminent).tint(.mint).disabled(!mode.canSwitch)
         }
       } else {
         VStack(alignment: .trailing, spacing: 8) {
-          Button("Volver al teclado normal") { micro.syncLights = false; store.restoreMicro() }
-            .buttonStyle(.borderedProminent).tint(.mint).disabled(!store.canRestoreMicro)
+          Button("Volver al teclado normal") { mode.perform(.off) }
+            .buttonStyle(.borderedProminent).tint(.mint).disabled(!mode.canSwitch)
           if store.microRecovery?.bindings != micro.bindings {
             Button("Actualizar funciones") { store.updateMicro(micro.bindings) }.disabled(!store.canRestoreMicro)
           }
@@ -255,12 +261,5 @@ struct CodexMicroView: View {
   private func color(_ state: MicroState) -> Color {
     let rgb = state.rgb.map { Double($0) / 255 }
     return Color(red: rgb[0], green: rgb[1], blue: rgb[2])
-  }
-  private func synchronizeLights() {
-    guard micro.syncLights, store.canRestoreMicro, store.error == nil, store.microRecovery?.bindings == micro.bindings,
-          let current = store.original,
-          let planned = try? CodexMicroProfile.withStates(micro.hardwareStates, on: current),
-          !current.sameContents(as: planned) else { return }
-    store.updateMicro(micro.bindings, states: micro.hardwareStates)
   }
 }

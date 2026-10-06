@@ -5,7 +5,7 @@ import RedragonCore
 
 @MainActor
 final class MicroStore: ObservableObject {
-  @Published var skinEnabled: Bool { didSet { defaults.set(skinEnabled, forKey: "micro.skin") } }
+  @Published var skinEnabled: Bool { didSet { if !preview { defaults.set(skinEnabled, forKey: "micro.skin") } } }
   @Published var bindings: [MicroBinding] { didSet { persistBindings() } }
   @Published var selectedNumber = 1
   @Published var message = "Num 1–6 pueden ser chats o prefunciones."

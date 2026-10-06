@@ -244,13 +244,50 @@ final class DeviceStore: ObservableObject {
   }
 
   func activateMicro(_ bindings: [MicroBinding]) {
-    guard canActivateMicro, let original else { return }
+    Task {
+      do { try await activateMicroNow(bindings) }
+      catch { self.error = error.localizedDescription }
+    }
+  }
+
+  /// Select and read the keyboard for shortcuts and commands, even from the mouse screen.
+  func readKeyboardForMicro() async throws {
+    guard canRead else { throw S136Error.message("Aplicá o descartá los cambios pendientes y esperá a que termine la operación actual.") }
+    busy = true
+    error = nil
+    status = "Leyendo el K628 para cambiar de modo…"
+    defer { busy = false }
+    endpoints = await controller.endpoints()
+    guard let keyboard = endpoints.first(where: { $0.target == 1 }) else {
+      throw S136Error.message("Conectá el receptor del K628 y encendé el teclado en 2,4 GHz.")
+    }
+    selectedID = keyboard.id
+    original = nil
+    edited = nil
+    do {
+      let snapshot = try await controller.read(keyboard)
+      original = snapshot
+      edited = snapshot
+      inputAccessDenied = false
+      if microOwnsSelected, let recovery = microRecovery {
+        microHardwareConfirmed = snapshot.sameContents(as: recovery.installed)
+      } else { microHardwareConfirmed = false }
+      status = "Leído · perfil \(snapshot.profile + 1) · teclado"
+    } catch {
+      inputAccessDenied = error.localizedDescription.contains("e00002e2")
+      microHardwareConfirmed = false
+      status = "No se pudo leer el teclado para cambiar de modo."
+      throw error
+    }
+  }
+
+  func activateMicroNow(_ bindings: [MicroBinding]) async throws {
+    guard canActivateMicro, let original else { throw S136Error.message("El teclado no está listo para activar Micro.") }
     busy = true
     error = nil
     status = "Respaldando y activando las seis teclas Micro…"
-    Task {
-      defer { busy = false }
-      do {
+    defer { busy = false }
+    do {
         let planned = try CodexMicroProfile.prepare(original, bindings: bindings)
         let backup = try backups.save(original)
         backupURL = backup
@@ -263,10 +300,10 @@ final class DeviceStore: ObservableObject {
         self.edited = verified
         microHardwareConfirmed = true
         status = "Micro activo · Num 1–6 · respaldo guardado."
-      } catch {
-        self.error = error.localizedDescription
-        status = "Activación sin confirmar. Volvé a leer y usá Volver al teclado normal."
-      }
+    } catch {
+      self.error = error.localizedDescription
+      status = "Activación sin confirmar. Volvé a leer y usá Volver al teclado normal."
+      throw error
     }
   }
 
@@ -298,12 +335,21 @@ final class DeviceStore: ObservableObject {
   }
 
   func restoreMicro() {
-    guard canRestoreMicro, let current = original, let recovery = microRecovery else { return }
+    Task {
+      do { try await restoreMicroNow() }
+      catch { self.error = error.localizedDescription }
+    }
+  }
+
+  func restoreMicroNow() async throws {
+    guard canRestoreMicro, let current = original, let recovery = microRecovery else {
+      throw S136Error.message("El teclado no está listo para restaurar sus ajustes anteriores.")
+    }
     busy = true
     error = nil
-    Task {
-      defer { busy = false }
-      do {
+    status = "Restaurando el teclado…"
+    defer { busy = false }
+    do {
         var baseline = try recovery.baseline.preparedForRestore(on: current)
         var installed = try recovery.installed.preparedForRestore(on: current)
         baseline.endpoint = current.endpoint
@@ -321,10 +367,10 @@ final class DeviceStore: ObservableObject {
         microRecovery = nil
         microHardwareConfirmed = false
         status = "Teclas y luces anteriores restauradas."
-      } catch {
-        self.error = error.localizedDescription
-        status = "El respaldo se conserva. No se confirmó la restauración."
-      }
+    } catch {
+      self.error = error.localizedDescription
+      status = "El respaldo se conserva. No se confirmó la restauración."
+      throw error
     }
   }
 

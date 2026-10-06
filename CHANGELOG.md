@@ -1,5 +1,15 @@
 # Cambios
 
+## 0.4.0 · atajo, comandos y avisos de Codex
+
+- Atajo global ⌃⌥⌘C y menú Codex para activar o restaurar el teclado.
+- Botón explícito de activación en la barra superior; la skin y las funciones físicas mantienen estados distintos.
+- Comandos micro on/off/toggle/status/show y script de acceso, dirigidos a la misma instancia por un canal local privado.
+- Activación y restauración compartidas entre botones, atajo, avisos y CLI, con lectura del K628 y confirmación de escritura antes de informar éxito.
+- Avisos opcionales de nuevas preguntas del chat local, con acción Activar Codex Micro y sin cambios automáticos del teclado.
+- Detección de nuevas preguntas incluso cuando otra sigue pendiente; sin replay al arrancar ni duplicados.
+- Diecisiete comprobaciones incluyen límites del canal local, comandos desconocidos, permisos del directorio y transiciones de avisos.
+
 ## 0.3.2 · acceso claro a las luces
 
 - Control y activación del teclado visibles arriba en modo Micro.

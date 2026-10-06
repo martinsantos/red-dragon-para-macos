@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import RedragonCore
 
 func expectEqual<T: Equatable>(
@@ -337,6 +338,54 @@ func checkLocalReaderPartialLinesAndTruncation() async throws {
   expectEqual(try await reader.read().state, .disconnected)
 }
 
+func checkMicroAttentionTransitions() throws {
+  var tracker = MicroAttentionTracker()
+  expectEqual(tracker.update([1: .attention, 2: .thinking]), []) // Replayed questions are not new notices.
+  expectEqual(tracker.update([1: .attention, 2: .attention]), [2])
+  expectEqual(tracker.update([1: .attention, 2: .attention]), [])
+  expectEqual(tracker.update([1: .thinking, 2: .complete]), [])
+  expectEqual(tracker.update([1: .attention, 2: .complete]), [1])
+  expectEqual(tracker.update([1: .disconnected]), [])
+  expectEqual(tracker.update([1: .attention]), []) // Reconnection must not replay an old question.
+  expectEqual(tracker.update([:]), [])
+  expectEqual(tracker.update([1: .attention]), []) // Newly attached route establishes a baseline.
+  var requests = MicroAttentionTracker()
+  expectEqual(requests.update([1: .attention], questions: [1: ["old"]]), [])
+  expectEqual(requests.update([1: .attention], questions: [1: ["old", "new"]]), [1])
+  expectEqual(requests.update([1: .attention], questions: [1: ["old", "new"]]), [])
+  expectEqual(requests.update([1: .attention], questions: [1: ["old"]]), [])
+}
+
+func checkMicroControlBoundary() throws {
+  let decoder = JSONDecoder()
+  for command in MicroCommand.allCases {
+    let decoded = try decoder.decode(MicroControlRequest.self, from: JSONEncoder().encode(MicroControlRequest(command)))
+    expectEqual(decoded.command, command)
+    try decoded.validate()
+  }
+  expectFailure(try decoder.decode(MicroControlRequest.self, from: Data("{\"version\":1,\"command\":\"reset\"}".utf8)))
+  let future = try decoder.decode(MicroControlRequest.self, from: Data("{\"version\":2,\"command\":\"on\"}".utf8))
+  expectFailure(try future.validate())
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent("micro-channel-\(UUID().uuidString)")
+  defer { try? FileManager.default.removeItem(at: directory) }
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+  try MicroControlSocket.validateDirectory(directory)
+  expectFailure(try MicroControlSocket.send(.status, directory: directory)) // No app, never fallback to hardware writes.
+  try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: directory.path)
+  expectFailure(try MicroControlSocket.validateDirectory(directory))
+  try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+  let link = directory.appendingPathComponent("alias")
+  try FileManager.default.createSymbolicLink(at: link, withDestinationURL: directory)
+  expectFailure(try MicroControlSocket.validateDirectory(link))
+  var pair: [Int32] = [-1, -1]
+  expectEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &pair), 0)
+  defer { pair.forEach { Darwin.close($0) } }
+  try MicroControlSocket.validatePeer(pair[0])
+  try MicroControlSocket.write(Data(repeating: 65, count: 200), to: pair[1])
+  shutdown(pair[1], SHUT_WR)
+  expectFailure(try MicroControlSocket.read(pair[0], limit: 64))
+}
+
 let checks = ProtocolChecks()
 let physicalKeys = KeyboardLayout.keys
 expectEqual(physicalKeys.count, 78)
@@ -363,4 +412,6 @@ try checkMicroProfileAndRecovery()
 try checkSingleKeyLightingFromGlobalEffect()
 try checkLocalCodexStateReducer()
 try await checkLocalReaderPartialLinesAndTruncation()
-print("PASS: 15 protocol, backup, lighting, Micro profile and local router checks.")
+try checkMicroAttentionTransitions()
+try checkMicroControlBoundary()
+print("PASS: 17 protocol, backup, lighting, Micro, router, notification and local command checks.")
