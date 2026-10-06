@@ -108,3 +108,11 @@ Después de abrir la app 0.2.1, el usuario también seleccionó Teclado → Ilum
 ## Ventana única en 0.3.1
 
 La revisión de la app mostró un único elemento de ventana principal con ID `main`. El selector Normal / Codex Micro cambió el contenido sin cambiar esa identidad de ventana. Se cerraron las instancias de prueba y anteriores. Launch Services prohíbe nuevas instancias y el bloqueo nativo previene duplicados incluso si se ejecuta directamente el binario. Los scripts usan `open` sin `-n`. El permiso de Monitoreo de entrada sigue siendo requerido para el hardware; el enrutador local y la skin funcionan sin él.
+
+## Controles de iluminación en 0.3.2
+
+El gráfico permite elegir Todo el teclado o Una tecla. Los ocho colores rápidos se guardan directamente con respaldo y lectura posterior. Al pasar de un efecto general a una tecla personalizada, las demás teclas visibles conservan el color configurado del efecto anterior; no se reutiliza una paleta antigua sin mostrarla. Las quince comprobaciones locales y el CI verifican este comportamiento, las posiciones ocultas y la conservación del mapa, las macros y los campos ajenos al cambio.
+
+En esta compilación se confirmó que el permiso activado correspondía a otra firma. Con autorización del usuario se reemplazó la entrada mediante Ajustes del Sistema y se comprobó que el permiso autorizado coincidiera con la firma del bundle actual. Tras reiniciar la misma app, desapareció el bloqueo y la interfaz mostró «Leído · perfil 1 · teclado», con los controles habilitados. No se recompiló ni se volvió a firmar el bundle después de renovar el permiso.
+
+La interfaz del mouse USB mostró un color violeta y «Color fijo guardado y verificado» durante la revisión. Esto acredita la confirmación de escritura de la app, sin sustituir una observación física de la luz. La prueba visual del gráfico nuevo en el teclado sigue pendiente: la herramienta de control de interfaz dejó de responder durante la prueba. El azul fijo confirmado desde la app 0.2.1 continúa documentado por separado.
