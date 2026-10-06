@@ -1,0 +1,85 @@
+# Protocolo y validación del S136
+
+Validación local: 6 de octubre de 2026, macOS 26, Apple Silicon, Swift 6.2. El acceso se implementó con IOKit/HID en espacio de usuario, sin extensión de kernel.
+
+## Evidencia y método
+
+Se inspeccionó estáticamente el programa de configuración incluido en `Redragon S136_Setup.exe`, descargado previamente por el usuario. El programa de Windows no se ejecutó. Las estructuras recuperadas se contrastaron con lecturas del receptor y del mouse reales, después con escrituras temporales y restauración de los datos originales.
+
+El [paquete oficial del S136](https://redragonshop.com/blogs/product-download/s136-k628-75-mechanical-gaming-keyboard-m693-gaming-mouse-tri-modes-combo) identifica los modelos K628 y M693. También se consultó el [protocolo EVision V2 de OpenRGB](https://github.com/CalcProgrammer1/OpenRGB/tree/master/Controllers/EVisionKeyboardController/EVisionV2KeyboardController) como referencia de familia; sus constantes no se trasladaron directamente porque este kit usa diferencias comprobadas en el ejecutable y el hardware.
+
+## Transporte
+
+Informes HID de salida y entrada de 64 bytes, ID 4. La apertura usa opciones 0 y no toma control exclusivo de las interfaces normales del teclado y mouse.
+
+| Bytes | Significado |
+|---|---|
+| 0 | ID de informe: 4 |
+| 1–2 | Suma little-endian de los bytes 3–63 de la solicitud, antes de colocar la ruta inalámbrica |
+| 3 | Comando |
+| 4 | Longitud del bloque |
+| 5–6 | Desplazamiento little-endian |
+| 7 | Estado de respuesta: 0 correcto; otros valores indican rechazo |
+| 8… | Datos |
+| 32, sólo receptor | Ruta: 1 teclado, 2 mouse |
+
+El receptor transporta hasta 24 bytes por consulta. El mouse directo por USB admite 56 bytes; en ese caso el byte 32 es dato y debe conservarse. La respuesta debe coincidir con la consulta en encabezado, suma, comando, longitud, desplazamiento y ruta cuando corresponda. La suma recibida es el eco de la consulta, no una suma nueva del contenido devuelto.
+
+Cada lectura o escritura se rodea con comandos 1 y 2. Antes del comando 2 se esperan 10 ms, como en el software del fabricante.
+
+## Comandos implementados
+
+| Comando | Función |
+|---|---|
+| 01 / 02 | Inicio y fin/commit |
+| 03 | Capacidades: 34 bytes |
+| 05 / 06 | Leer/escribir configuración |
+| 08 / 09 | Leer/escribir mapa actual |
+| 0A / 0B | Leer/escribir colores personalizados del teclado |
+| 14 / 15 | Leer/escribir memoria de macros |
+
+El comando 07 lee el mapa de fábrica, no el mapa editable. Usarlo para comprobar una reasignación da un resultado incorrecto.
+
+## Estructuras comprobadas
+
+Capacidades aceptadas: firma AA55; capacidad de macros 24 × 128 = 3072 bytes. Teclado: valores 6, 128 y tipo 2; mouse: 32, 42 y tipo 1. Una revisión con otra estructura se rechaza.
+
+La configuración tiene 99 bytes por perfil, en bloques de 100 bytes. Se conserva el perfil actual y se escribe el buffer completo en bloques del transporte. Escribir un campo aislado no resultó válido en este kit. Los índices identificados son:
+
+- 1: efecto; 2: brillo; 3: velocidad; 5: multicolor; 6–8: RGB.
+- 11: polling USB del mouse, 0/1/2/3 para 125/250/500/1000 Hz.
+- 14 + 9 × nivel: registro de DPI. Desplazamientos +2/+3: código del sensor; +4/+5: DPI mostrados. Pares contrastados: 800→6, 1200→16, 1600→26, 2400→46, 7200→96.
+- 22 en el teclado: banco de paleta personalizada. La primera paleta usa banco 0 y efecto 19. El stride entre bancos es 512 bytes; esta versión sólo edita el primero.
+
+Cada asignación ocupa 3 bytes. Las teclas usan tipo 20 hex, máscara de modificadores y uso HID; los clics usan tipo 10 hex y máscara de botón. El tipo 71 hex asigna una macro por índice y número de repeticiones. Fn, posición 74 del teclado comprobado, se preserva.
+
+La memoria de macros tiene encabezado de 16 bytes con AA55, longitud y cantidad de macros; sigue una tabla de offsets de 2 bytes. Cada secuencia tiene encabezado de 4 bytes, con cantidad de eventos y dos bytes reservados. Cada evento ocupa 4 bytes: pausa en milisegundos de 16 bits, tipo con bit 80 hex para presionar, y tecla/botón. Se conservan campos reservados y datos no utilizados. El editor exige pulsaciones balanceadas.
+
+El tipo de evento 0 para teclas sigue pendiente de confirmación por ejecución física. El tipo 1 para botones de mouse se encontró en las secuencias del fabricante. Que una tabla se pueda escribir y releer no valida por sí solo su ejecución.
+
+## Resultados
+
+La versión inicial aprobó siete comprobaciones locales: paquete conocido del receptor, suma y offsets, rechazo de respuestas ajenas/antiguas y errores, integridad de campos de DPI, modificadores/Fn, formato y validación de macros, e integridad de colores por tecla.
+
+Pruebas con hardware real:
+
+- Mouse por USB: configuración completa, brillo, mapa de botones, DPI, polling, memoria de macro y asignación; escritura y lectura correctas. Restauración de todos los buffers comparada byte por byte.
+- Teclado por receptor 2,4 GHz: configuración completa, brillo, mapa de teclas, memoria de macro, asignación y paleta personalizada; escritura y lectura correctas. Restauración de todos los buffers comparada byte por byte.
+- Prueba física de macro F13 con la rueda: el usuario pulsó el botón, pero el monitor no registró F13. Ejecución pendiente de confirmación; datos originales restaurados.
+- Aplicación nativa: lectura del teclado confirmada en la interfaz después de renovar el permiso de Monitoreo de entrada. La interfaz mostró K628, perfil 1 y los controles de iluminación con los valores leídos.
+
+Los experimentos produjeron respaldos y salidas locales que se conservaron fuera del repositorio público. El estado visual de las luces, la medición física del sensor/polling y la ejecución de cada asignación no quedan demostrados únicamente por la lectura de memoria.
+
+La aplicación comprueba que los datos no hayan cambiado desde la última lectura antes de aplicar y crea respaldos en disco. Ante un fallo intenta restaurar todos los buffers y vuelve a verificar; si esa comprobación también falla, informa que es necesaria la recuperación con el respaldo.
+
+## Permisos y distribución
+
+La firma es ad hoc y la compilación entregada es arm64. `e00002e2` al abrir HID indica que el proceso no tiene acceso permitido. Se confirmó en el registro TCC que una entrada activada puede corresponder a una firma anterior de esta app; debe quitarse y volver a agregarse la versión actual. No se modificó la base de permisos de macOS ni se desactivaron protecciones del sistema.
+
+## Pendientes
+
+Ejecución física de macros; mouse por receptor; Bluetooth; teclado por USB; otras revisiones; DPI arbitrarios y ajuste X/Y; otros bancos de colores o selección de perfil; efectos dinámicos de audio y pantalla. No se envían comandos de reset, actualización de firmware ni comandos no identificados.
+
+## Refactorización 0.2.0
+
+Se conserva el formato de paquetes, los comandos y el transporte del hardware. Las diez comprobaciones locales agregan validación de snapshots importados, compatibilidad de restauración y persistencia JSON. Los cambios de interfaz se revisan en modo de vista previa; no se repiten escrituras al kit como parte del CI. Los dumps de configuración del usuario y los binarios del fabricante no se publican en el repositorio.
