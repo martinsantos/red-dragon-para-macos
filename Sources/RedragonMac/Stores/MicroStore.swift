@@ -57,6 +57,7 @@ final class MicroStore: ObservableObject {
     catch { self.error = error.localizedDescription }
   }
   func perform(_ binding: MicroBinding) {
+    error = nil
     do {
       switch binding.action {
       case .prompt: message = try actions.copyPrompt(binding.prompt)

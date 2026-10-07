@@ -42,6 +42,12 @@ final class MicroNotifications: NSObject, ObservableObject, UNUserNotificationCe
       try? await center.add(UNNotificationRequest(identifier: "micro-attention-\(number)", content: content, trigger: nil))
     }
   }
+  func skinChanged(_ name: String) {
+    guard allowed, let center else { return }
+    let content = UNMutableNotificationContent(); content.title = "Skin: \(name)"
+    content.body = "⌘Espacio para cambiar de skin."
+    Task { try? await center.add(UNNotificationRequest(identifier: "skin-changed", content: content, trigger: nil)) }
+  }
   func clear(_ numbers: [Int]) {
     center?.removeDeliveredNotifications(withIdentifiers: numbers.map { "micro-attention-\($0)" })
   }

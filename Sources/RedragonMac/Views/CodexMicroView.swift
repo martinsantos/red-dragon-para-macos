@@ -72,9 +72,9 @@ struct CodexMicroView: View {
         if store.microRecovery != nil {
           DisclosureGroup("Recuperación del teclado") {
             VStack(alignment: .leading, spacing: 8) {
-              Text("Si cambiaste ajustes con otra app, podés recuperar todo el respaldo anterior a Micro. Esto reemplaza las modificaciones posteriores; se guarda primero una copia del estado actual.")
+              Text("Volver a Normal recupera las teclas y luces anteriores y conserva los otros ajustes. Si otra app cambió esas teclas, se conserva el respaldo y se informa el conflicto.")
                 .font(.caption).foregroundStyle(.secondary)
-              Button("Restaurar respaldo completo anterior a Micro") {
+              Button("Volver a Normal · recuperar teclas y luces") {
                 micro.syncLights = false
                 store.restoreFullMicroBackup()
               }.disabled(!store.canRestoreMicro)

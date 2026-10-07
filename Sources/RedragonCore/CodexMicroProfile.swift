@@ -82,7 +82,7 @@ public enum CodexMicroProfile {
   public static let slots = [63, 83, 84, 46, 47, 82] // Num 1…6
   public static let displayOrder = [4, 5, 6, 1, 2, 3]
 
-  public static func prepare(_ original: Snapshot, bindings: [MicroBinding]) throws -> Snapshot {
+  public static func prepare(_ original: Snapshot, bindings: [MicroBinding], liveLighting: Bool = false, launcherColors: Bool = false) throws -> Snapshot {
     try original.validateStructure()
     try MicroBinding.validate(bindings)
     guard original.isKeyboard, original.customColors != nil else {
@@ -102,6 +102,10 @@ public enum CodexMicroProfile {
       try result.setKeyColor(binding.action == .recentChat ? [230, 230, 230] : [165, 95, 255], at: slots[index])
     }
     if result.configuration[2] == 0 { result.configuration[2] = 4 }
+    if launcherColors {
+      for i in 0..<4 { try result.setKeyColor(SkinPalette.launcherColors[i], at: i+1) }
+    }
+    if liveLighting { result.configuration[1] = 0xfe }
     return result
   }
 
@@ -114,16 +118,17 @@ public enum CodexMicroProfile {
 
   /// Refuse restoration if an external app changed the six keys, profile or palette.
   /// Non-Micro changes are preserved when merging the original fields back.
-  public static func restore(baseline: Snapshot, installed: Snapshot, current: Snapshot) throws -> Snapshot {
+  public static func restore(baseline: Snapshot, installed: Snapshot, current: Snapshot, launcherColors: Bool = false) throws -> Snapshot {
     try installed.validateStructure()
     _ = try baseline.preparedForRestore(on: current)
     guard installed.profile == current.profile, installed.capabilities == current.capabilities else {
       throw S136Error.message("Seleccioná el dispositivo y perfil donde activaste Micro.")
     }
     let configFields = [1, 2, 22]
+    let colorSlots = slots + (launcherColors ? Array(1...4) : [])
     guard slots.allSatisfy({ installed.assignment(at: $0) == current.assignment(at: $0) }),
       configFields.allSatisfy({ installed.configuration[$0] == current.configuration[$0] }),
-      slots.allSatisfy({ slot in
+      colorSlots.allSatisfy({ slot in
         installed.customColors.map { Array($0[slot * 3..<slot * 3 + 3]) }
           == current.customColors.map { Array($0[slot * 3..<slot * 3 + 3]) }
       })
@@ -134,6 +139,8 @@ public enum CodexMicroProfile {
     for field in configFields { result.configuration[field] = baseline.configuration[field] }
     for slot in slots {
       try result.assign(baseline.assignment(at: slot), to: slot)
+    }
+    for slot in colorSlots {
       if var colors = result.customColors, let before = baseline.customColors {
         colors.replaceSubrange(slot * 3..<slot * 3 + 3, with: before[slot * 3..<slot * 3 + 3])
         result.customColors = colors

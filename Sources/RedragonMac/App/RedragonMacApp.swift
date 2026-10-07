@@ -5,6 +5,8 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var instanceLock: Int32 = -1
+  var prepareQuit: (() async -> Bool)?
+  private var terminating = false
 
   func applicationWillFinishLaunching(_ notification: Notification) {
     let identifier = Bundle.main.bundleIdentifier ?? "local.redragonmac.S136"
@@ -44,6 +46,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard let prepareQuit else { return .terminateNow }
+    guard !terminating else { return .terminateCancel }
+    terminating = true
+    Task { @MainActor in
+      let ready = await prepareQuit()
+      terminating = false
+      sender.reply(toApplicationShouldTerminate: ready)
+    }
+    return .terminateLater
+  }
+
   func applicationWillTerminate(_ notification: Notification) {
     if instanceLock >= 0 { flock(instanceLock, LOCK_UN); Darwin.close(instanceLock) }
   }
@@ -51,14 +65,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct RedragonMacApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
-  @StateObject private var mode = MicroModeController()
+  @StateObject private var skins = KeyboardSkinController()
   var body: some Scene {
     Window("RED DRAGON PARA MACOS", id: "main") {
-      ContentView(mode: mode).frame(minWidth: 940, minHeight: 640)
+      ContentView(skins: skins).frame(minWidth: 940, minHeight: 640)
+        .onAppear { delegate.prepareQuit = { await skins.prepareToQuit() } }
     }.defaultSize(width: 1120, height: 740)
       .commands {
         CommandGroup(replacing: .newItem) {}
-        AppCommands(store: mode.store, mode: mode)
+        AppCommands(store: skins.store, mode: skins.mode, skins: skins)
       }
   }
 }

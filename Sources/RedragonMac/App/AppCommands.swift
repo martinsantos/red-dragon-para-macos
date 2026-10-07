@@ -1,16 +1,28 @@
 // SPDX-License-Identifier: MIT
 import SwiftUI
+import RedragonCore
 
 struct AppCommands: Commands {
   @ObservedObject var store: DeviceStore
   @ObservedObject var mode: MicroModeController
 
+  @ObservedObject var skins: KeyboardSkinController
+
   var body: some Commands {
     CommandGroup(after: .newItem) {
       Button("Detectar dispositivos", action: store.detect)
-        .keyboardShortcut("r", modifiers: [.command, .shift]).disabled(!store.canRead)
+        .keyboardShortcut("r", modifiers: [.command, .shift]).disabled(!store.canRead || skins.busy)
       Button("Aplicar cambios", action: store.apply)
         .keyboardShortcut("s").disabled(!store.canApply)
+    }
+    CommandMenu("Skins") {
+      Button("Siguiente skin · ⌘Espacio") { skins.select(nil) }.disabled(!skins.canSwitch)
+      Toggle("Auto · según aplicación", isOn: $skins.autoProfiles)
+      ForEach(KeyboardSkin.allCases) { skin in
+        Button("Activar \(skin.title)") { skins.select(skin) }.disabled(!skins.canSwitch || (skin == .music && !skins.musicAvailable))
+      }
+      Divider()
+      Button("Mostrar Skins") { skins.galleryVisible = true; skins.showWindow() }
     }
     CommandMenu("Codex") {
       Button("Activar Codex Micro") { mode.perform(.on) }.disabled(!mode.canSwitch)

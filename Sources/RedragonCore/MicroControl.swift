@@ -3,6 +3,10 @@ import Foundation
 
 public enum MicroCommand: String, Codable, Sendable, CaseIterable {
   case on, off, toggle, status, show
+  case skinNext, skinNormal, skinApps, skinCodex, skinClaude, skinBoca, skinMusic, skinsShow, hotkeysRetry
+  case launchF1, launchF2, launchF3, launchF4
+  case pad1, pad2, pad3, pad4, pad5, pad6
+  case audioOn, audioOff
 }
 
 public struct MicroControlRequest: Codable, Sendable {
@@ -20,9 +24,22 @@ public struct MicroControlStatus: Codable, Sendable {
   public var skinVisible: Bool
   public var busy: Bool
   public var message: String
-  public init(hardwareActive: Bool, recoveryPending: Bool, skinVisible: Bool, busy: Bool, message: String) {
+  public var skin: String?
+  public var requestedSkin: String?
+  public var audioConnected: Bool?
+  public var audioLevel: Float?
+  public var audioMessage: String?
+  public var lastLauncher: Int?
+  public var lastPadAction: Int?
+  public var launcherKeysActive: Bool?
+  public var autoProfiles: Bool?
+  public var shortcutActive: Bool?
+  public var shortcutPresses: Int?
+  public var lastPhysicalLauncher: Int?
+  public var lastPhysicalPad: Int?
+  public init(hardwareActive: Bool, recoveryPending: Bool, skinVisible: Bool, busy: Bool, message: String, skin: String? = nil) {
     self.hardwareActive = hardwareActive; self.recoveryPending = recoveryPending
-    self.skinVisible = skinVisible; self.busy = busy; self.message = message
+    self.skinVisible = skinVisible; self.busy = busy; self.message = message; self.skin = skin
   }
 }
 

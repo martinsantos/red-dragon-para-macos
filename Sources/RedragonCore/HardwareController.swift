@@ -14,8 +14,8 @@ public actor HardwareController {
       let out =
         (IOHIDDeviceGetProperty(device, kIOHIDMaxOutputReportSizeKey as CFString) as? NSNumber)?
         .intValue ?? 0
-      // Only this kit's two verified endpoints can currently receive writes.
-      guard out == 64, [0x2225, 0x50b8].contains(pid) else { return [] }
+      // The direct K628 (509d) was observed on USB; read() still verifies its capabilities.
+      guard out == 64, [0x2225, 0x50b8, 0x509d].contains(pid) else { return [] }
       let product =
         IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String ?? "Redragon"
       return (pid == 0x50b8 ? [UInt8(1), 2] : [UInt8(0)]).map {
@@ -100,6 +100,37 @@ public actor HardwareController {
       throw S136Error.message(
         "\(failure.localizedDescription) Se restauraron y verificaron los ajustes originales.")
     }
+  }
+  /// Firmware's live RGB buffer (0x12), without a configuration transaction or commit.
+  /// The caller must retain a verified K628 snapshot and stop this override before restore.
+  public func sendLiveColors(on known: Snapshot, colors: [UInt8]) throws {
+    try known.validateStructure()
+    guard known.isKeyboard,
+          (known.endpoint.productID == 0x509d && known.endpoint.target == 0)
+            || (known.endpoint.productID == 0x50b8 && known.endpoint.target == 1),
+          colors.count == 384 else { throw S136Error.message("RGB temporal requiere el K628 reconocido y 128 colores.") }
+    let transport = try HIDTransport(endpoint: known.endpoint)
+    try transport.write(command: 0x12, bytes: colors)
+  }
+  public func stopLiveColors(on known: Snapshot) throws {
+    try known.validateStructure()
+    guard known.isKeyboard,
+          (known.endpoint.productID == 0x509d && known.endpoint.target == 0)
+            || (known.endpoint.productID == 0x50b8 && known.endpoint.target == 1) else {
+      throw S136Error.message("El canal RGB temporal solo está disponible para el K628 reconocido.")
+    }
+    let transport = try HIDTransport(endpoint: known.endpoint)
+    _ = try transport.query(command: 0x13)
+  }
+  /// Keep the firmware's volatile override alive without resending the whole palette.
+  /// A one-byte 0x12 refresh is used by EVision; use a hidden K628 matrix position.
+  public func refreshLiveColors(on known: Snapshot, colors: [UInt8]) throws {
+    try known.validateStructure()
+    guard known.endpoint.supportsLiveLighting, colors.count == 384 else {
+      throw S136Error.message("El refresco RGB requiere el K628 por cable y su paleta temporal.")
+    }
+    let offset = LiveLightingProfile.refreshOffset
+    _ = try HIDTransport(endpoint: known.endpoint).query(command: 0x12, offset: offset, size: 1, data: [colors[offset]])
   }
   private func write(
     _ snapshot: Snapshot, comparedWith previous: Snapshot?, using transport: HIDTransport

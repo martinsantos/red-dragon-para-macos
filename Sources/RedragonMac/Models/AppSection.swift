@@ -7,6 +7,7 @@ enum AppSection: String, CaseIterable, Identifiable {
   case dpi = "DPI y respuesta"
   case macros = "Macros"
   case backup = "Respaldo"
+  case skins = "Skins"
   case micro = "Codex Micro"
 
   var id: String { rawValue }
@@ -17,6 +18,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case .dpi: "speedometer"
     case .macros: "repeat"
     case .backup: "externaldrive"
+    case .skins: "paintpalette"
     case .micro: "circle.hexagongrid"
     }
   }

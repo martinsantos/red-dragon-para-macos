@@ -2,7 +2,7 @@
 
 Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693**. Permite leer y guardar ajustes del kit mediante USB HID, con respaldos y verificación de las escrituras.
 
-**Proyecto comunitario independiente, versión preliminar 0.4.1.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
+**Proyecto comunitario independiente. 0.6.0 en desarrollo en [PR #1](https://github.com/martinsantos/red-dragon-para-macos/pull/1); última descarga publicada: 0.5.1.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
 
 [Descargar versión preliminar](https://github.com/martinsantos/red-dragon-para-macos/releases) · [Validación y protocolo](docs/VALIDATION.md) · [Información para Redragon](docs/REDRAGON-ADOPTION.md)
 
@@ -24,9 +24,9 @@ Las pruebas de hardware verifican los bytes guardados y restaurados. La lectura 
 
 ## Usar la app
 
-Requiere **macOS 14 o posterior**. La descarga 0.4.1 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
+Requiere **macOS 14 o posterior**. La compilación local 0.6.0 es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
 
-1. Conectá el receptor USB del kit y encendé el teclado en **2,4 GHz**. Para configurar el mouse en la conexión validada, usá su cable USB.
+1. Conectá el teclado por cable de datos con su selector en **OFF**, o usá el receptor con el teclado en **2,4 GHz**. Música requiere cable. Para configurar el mouse en la conexión validada, usá su cable USB.
 2. Abrí `RedragonMac.app`.
 3. En **Ajustes del Sistema → Privacidad y seguridad → Monitoreo de entrada**, agregá y habilitá la app. Puede aparecer como **RED DRAGON PARA MACOS** o **RedragonMac.app**. En **Respaldo** hay botones para abrir el ajuste y mostrar la app en Finder.
 4. Salí con **⌘Q**, volvé a abrirla y pulsá **Detectar**.
@@ -37,6 +37,77 @@ Si aparece `e00002e2` aunque el interruptor esté activado, eliminá la entrada 
 Los respaldos se guardan en `~/Library/Application Support/RedragonMac/Backups`. **Preparar restauración…** carga un respaldo para revisarlo; **Aplicar al dispositivo** lo escribe. La app intenta recuperar y verificar el respaldo si una escritura falla.
 
 La interfaz de configuración descarta los informes normales de teclas y movimiento. El modo Micro registra únicamente las teclas de acción asignadas del pad; no guarda pulsaciones. El enrutador conserva identificadores y estados derivados de registros locales, sin exportar conversaciones. El conector avanzado opcional permite observar un App Server en localhost.
+
+## Skins y accesos rápidos (0.6.0)
+
+Abrí **Skins** en la misma ventana. **⌘Espacio** recorre Normal → Apps → Codex → Claude → Boca → Música. En el Redragon conectado a una Mac es **Win + Espacio**; no hace falta Fn. Si Spotlight usa esa combinación, quitá su atajo en Ajustes del Sistema → Teclado → Funciones rápidas → Spotlight y pulsá **Reintentar atajo**. La app informa una colisión y conserva las acciones 1–4 si sólo está ocupado el cambio de skin. Este proyecto compila para macOS; no incluye un controlador para Windows.
+
+El nombre aparece en la app y, si ya permitiste notificaciones, como aviso de macOS. Si elegís varias skins durante una escritura, termina la operación en curso y aplica tu última elección. Música se omite en el atajo cuando no hay USB directo.
+
+- **Normal:** detiene el RGB temporal y recupera tus luces, las teclas 1–4 y el pad numérico anteriores.
+- **Apps:** fondo tenue y cuatro accesos de colores, sin funciones en el pad.
+- **Codex:** fondo azul, cuatro accesos y seis funciones de Codex. El selector **Funciones / Chats** permite conservar el enrutador de chats local.
+- **Claude:** fondo naranja, cuatro accesos y seis funciones de Claude.
+- **Boca:** azul, franja amarilla sobre la fila central y azul, con los cuatro accesos superpuestos.
+- **Música:** conecta el audio del sistema y dibuja ondas según 18 bandas; en silencio apaga las ondas. Requiere cable de datos y el permiso de **Grabación de pantalla y audio del sistema**. Procesa audio en memoria sin guardar grabaciones, video ni micrófono. Cambiar de skin o salir detiene la captura.
+
+**Auto · perfil según la aplicación activa** elige Codex, Claude o Apps al enfocar esas apps, Chrome o WhatsApp. Las aplicaciones sin perfil no fuerzan un cambio. Elegir una skin manualmente, usar ⌘Espacio o un comando de skin desactiva Auto, de modo que Boca y Música pueden permanecer fijas.
+
+### Accesos desde cualquier aplicación
+
+Las teclas son **1–4 de la fila superior**, sin Fn ni Enter. Funcionan con la app abierta, una skin distinta de Normal y **Accesos globales 1–4** activado.
+
+| Tecla física | App inicial | Color |
+|---|---|---|
+| 1 | Codex, ventana/chat que dejaste abierto | Azul |
+| 2 | Claude, ventana/chat que dejaste abierto | Naranja |
+| 3 | Chrome | Violeta |
+| 4 | WhatsApp | Verde |
+
+La primera pulsación de 3 desde otra app trae la última ventana de Chrome; las siguientes, estando Chrome al frente, recorren sus ventanas existentes. Requiere **Accesibilidad**. No crea ventanas nuevas. Codex y Claude enfocan su ventana existente sin crear un chat. Si cerraste una app, ella decide qué chat recupera. **Cambiar app…** permite asignar otra aplicación local.
+
+Para escribir los números, volvé a **Normal** o apagá **Accesos globales 1–4**. La app instala usos HID estándar F1–F4 en esas cuatro posiciones del K628 y los registra globalmente. Mientras están activos, F1–F4 de otros teclados también disparan esas acciones; sus teclas numéricas conservan sus números. La capa Fn original no se modifica. Si otra app reservó una tecla necesaria, se rechaza la transición antes de cambiar el teclado.
+
+### Funciones del pad numérico
+
+En Codex o Claude, **Num 1–6** ejecutan la función sin Enter y enfocan la app correspondiente. Sus usos HID F5–F10 también quedan reservados en otros teclados mientras ese perfil está activo.
+
+| Pad | Codex · Funciones | Claude |
+|---|---|---|
+| Num 1 | Uso | Uso |
+| Num 2 | Chat que necesita atención | Nuevo chat |
+| Num 3 | Dictar | Configurar dictado |
+| Num 4 | Modelo | Modelo |
+| Num 5 | Revisión | Buscar chats |
+| Num 6 | Nuevo chat | Ajustes |
+
+**Uso** abre el panel web oficial de cada servicio. **Atención** trae el chat: la respuesta o aprobación la decide el usuario. Codex utiliza sus [atajos documentados](https://learn.chatgpt.com/docs/reference/commands). Dictar intenta su botón accesible y, si hay un solo editor identificable, lo enfoca antes de pedir el dictado; esa corrección aún requiere confirmación física.  Claude busca controles accesibles para el modelo y la configuración de dictado, y muestra un error si no los encuentra. Num 3 de Claude abre esa configuración; la grabación se inicia desde el control nativo de Claude. La app no habilita el micrófono ni envía una respuesta automáticamente. Abrir un selector no confirma que la app destino haya cambiado el modelo.
+
+### Conexión, recuperación y comandos
+
+El selector del S136 debe estar en **OFF** para trabajar por cable; no lleva una posición rotulada USB. [Manual oficial](https://cdn.shopify.com/s/files/1/0012/4957/4961/files/Redragon_BS136_Combo_User_Manual.pdf?v=1724739574). La interfaz identificada es `320F:509D`; un cable que sólo carga no la expone a macOS.
+
+Las skins estáticas usan Personalizado (19) y paleta 1. Música usa el modo de firmware `FE` y el buffer temporal `0x12`, su refresco y fin `0x13`, sin guardar cada cuadro en la paleta persistente. La sesión conserva un único respaldo original y un registro antes de cada escritura. Una lectura determina qué skin sobrevivió a un cierre inesperado. Un fallo conserva o recupera la skin anterior; si no puede verificarse, conserva el registro y lo informa. Las macros y Fn se conservan.
+
+Comandos dirigidos a la misma instancia abierta:
+
+```sh
+dist/RedragonMac.app/Contents/MacOS/s136ctl skin next
+dist/RedragonMac.app/Contents/MacOS/s136ctl skin apps
+dist/RedragonMac.app/Contents/MacOS/s136ctl skin claude
+dist/RedragonMac.app/Contents/MacOS/s136ctl skin boca
+dist/RedragonMac.app/Contents/MacOS/s136ctl skin music
+dist/RedragonMac.app/Contents/MacOS/s136ctl skin normal
+dist/RedragonMac.app/Contents/MacOS/s136ctl skin status --json
+dist/RedragonMac.app/Contents/MacOS/s136ctl skin retry-shortcut
+dist/RedragonMac.app/Contents/MacOS/s136ctl launch 2
+dist/RedragonMac.app/Contents/MacOS/s136ctl pad 4
+dist/RedragonMac.app/Contents/MacOS/s136ctl audio on
+dist/RedragonMac.app/Contents/MacOS/s136ctl audio status --json
+dist/RedragonMac.app/Contents/MacOS/s136ctl audio off
+```
+
+La confirmación USB y las pruebas de código no sustituyen observar los LEDs ni pulsar los atajos físicos. Ver el alcance actualizado en [VALIDATION.md](docs/VALIDATION.md).
 
 ## Modo Codex Micro
 
@@ -58,7 +129,7 @@ Si el teclado está escribiendo ajustes o actualizando las luces, la orden de vo
 
 En el panel o menú Codex, activá **Avisarme cuando Codex necesite respuesta** y permití las notificaciones de macOS. Un nuevo pedido registrado por un chat local conectado produce un aviso con **Activar Codex Micro**. El aviso no cambia el modo automáticamente. Se omiten las preguntas antiguas al abrir o conectar un chat y se evitan avisos duplicados; una pregunta nueva puede avisar aunque otra siga pendiente. La app debe estar abierta y el chat conectado al enrutador local. Las aprobaciones ausentes del registro no generan avisos.
 
-La app usa **una sola ventana**. En la barra superior, el selector **Normal / Codex Micro** cambia de modo dentro de esa ventana. Volver a Normal restaura primero las teclas Micro si están activas. Abrir la app de nuevo enfoca la instancia existente. La skin se puede usar sin modificar el teclado.
+La app usa **una sola ventana**. El selector de skins y el panel **Skins** cambian de modo dentro de ella. Volver a Normal restaura primero las teclas Micro si están activas. Abrir la app de nuevo enfoca la instancia existente. La skin se puede usar sin modificar el teclado.
 
 - Seis botones corresponden a **Num 1–6**, con el orden físico 4/5/6 arriba y 1/2/3 abajo. Un clic selecciona el botón para configurar su acción; no cambia por sí solo una luz física.
 - **Cambiar luces** abre los controles de iluminación dentro de la misma ventana. El bloque de activación del teclado queda arriba. **Micro en pantalla** y **Teclado Micro activo** distinguen la interfaz del control físico.
@@ -66,7 +137,7 @@ La app usa **una sola ventana**. En la barra superior, el selector **Normal / Co
 - **Conectar chat local…** enlaza un archivo `rollout-*.jsonl` de `~/.codex/sessions` con el botón seleccionado. Lee el registro cada segundo y conserva solo su identificador, estado y fecha de evento. Los archivos y las rutas quedan en esta Mac.
 - Azul indica tarea iniciada, ámbar una pregunta pendiente registrada y verde una tarea terminada. El adaptador muestra el **último estado observado**: no inventa errores, aprobaciones ni actividad que el registro no exponga. Este formato local depende de la versión de Codex y puede requerir adaptación tras una actualización.
 - **Activar en teclado** respalda los ajustes antes de asignar las seis teclas y la paleta. **Volver al teclado normal** restaura las seis teclas y las luces. El archivo de recuperación sobrevive al cierre de la app. Si otra app modificó el perfil, hay una recuperación completa con un nuevo respaldo del estado actual.
-- Los chats locales y las prefunciones requieren esta app abierta. Las teclas de chat reciente envían `⌘⌥1`…`⌘⌥6` y requieren Codex al frente. Las acciones de app reservan las teclas correspondientes del pad numérico en todos los teclados conectados mientras Micro esté activo.
+- Los chats locales y las prefunciones requieren esta app abierta. Las acciones de chat reciente enfocan Codex y envían `⌘⌥1`…`⌘⌥6`. En el perfil actual los seis usos F5–F10 del pad quedan reservados globalmente mientras Micro esté activo.
 - La prefunción se copia al portapapeles: pegá con `⌘V` y elegí cuándo enviarla. No se aceptan propuestas automáticamente.
 - Los botones en pantalla de chats recientes, dictado y modelo necesitan **Accesibilidad** para enviar sus atajos a Codex. Abrir un chat conectado y copiar una prefunción no requieren ese permiso.
 
@@ -78,16 +149,17 @@ open dist/RedragonMac.app --args --micro --follow-codex /ruta/al/rollout-del-cha
 
 El conector avanzado de App Server es opcional y de solo lectura. Sigue los chats cargados en ese servidor; un servidor nuevo no observa automáticamente las conversaciones de la app de escritorio. [Documentación de Codex App Server](https://learn.chatgpt.com/docs/app-server).
 
-La skin usa la convención visual de [Codex Micro](https://learn.chatgpt.com/docs/features/codex-micro). Es una implementación independiente para Redragon; no agrega la compatibilidad nativa del dispositivo de Work Louder.
+La vista opcional Chats usa la convención visual de [Codex Micro](https://learn.chatgpt.com/docs/features/codex-micro). Es una implementación independiente para Redragon; no agrega la compatibilidad nativa del dispositivo de Work Louder.
 
 ## Compatibilidad
 
 | Dispositivo | VID:PID | Conexión |
 |---|---|---|
 | Receptor del S136 | `320F:50B8` | Teclado en 2,4 GHz validado |
+| Teclado K628 | `320F:509D` | USB por cable identificado y leído |
 | Mouse M693 | `320F:2225` | USB por cable validado |
 
-El mouse por receptor se detecta, pero aún requiere pruebas. Bluetooth, teclado por cable, otras revisiones, selección de otros perfiles o bancos de colores, DPI arbitrarios, X/Y independientes y efectos dinámicos de audio/pantalla quedan pendientes. La app rechaza estructuras de hardware no reconocidas.
+El mouse por receptor se detecta, pero aún requiere pruebas. Bluetooth, otras revisiones, selección de otros perfiles o bancos de colores, DPI arbitrarios, X/Y independientes y efectos de pantalla quedan pendientes. La captura de música y el RGB temporal por cable están implementados; los resultados de observación física se indican por separado. La app rechaza estructuras de hardware no reconocidas.
 
 ## Compilar y comprobar
 
@@ -100,7 +172,7 @@ cd red-dragon-para-macos
 ./script/build_and_run.sh
 ```
 
-`check.sh` compila la app y el CLI, ejecuta dieciocho comprobaciones del protocolo, los respaldos, el enrutador, los avisos y el canal de comandos, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
+`check.sh` compila la app y el CLI, ejecuta veintiocho comprobaciones del protocolo, los respaldos, el enrutador, los avisos y el canal de comandos, y valida el plist y la firma del bundle. No escribe al hardware. GitHub Actions ejecuta esas comprobaciones en macOS.
 
 ```sh
 # Generar un ZIP de la compilación release y su SHA-256.

@@ -7,6 +7,7 @@ struct MicroRecovery: Codable {
   var installed: Snapshot
   var bindings: [MicroBinding]
   var backupURL: URL
+  var launcherColors: Bool? = nil
 
   func validate() throws {
     try baseline.validateStructure()

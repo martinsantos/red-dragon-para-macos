@@ -6,6 +6,7 @@ struct KeyboardDiagram: View {
   enum Mode { case mapping, colors, lighting }
   let snapshot: Snapshot
   var mode = Mode.mapping
+  var instruction: String? = nil
   @Binding var selectedSlot: Int
 
   var body: some View {
@@ -22,7 +23,7 @@ struct KeyboardDiagram: View {
           }
         }
       }.frame(height: CGFloat(KeyboardLayout.rowCount) * 47 + 15)
-      Text(mode == .lighting ? "Tocá una tecla y elegí un color abajo. El dibujo muestra los ajustes de color; los efectos animados se representan con su color configurado." : "Tocá una tecla en el dibujo. Abajo podés revisar su función y cambiarla.")
+      Text(instruction ?? (mode == .lighting ? "Tocá una tecla y elegí un color abajo. El dibujo muestra los ajustes de color; los efectos animados se representan con su color configurado." : "Tocá una tecla en el dibujo. Abajo podés revisar su función y cambiarla."))
         .font(.caption).foregroundStyle(.secondary)
     }
     .accessibilityElement(children: .contain)

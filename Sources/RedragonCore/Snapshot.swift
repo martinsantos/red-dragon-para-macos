@@ -29,8 +29,9 @@ public struct Snapshot: Codable, Sendable {
   public func validateStructure() throws {
     guard capabilities.count == 34, capabilities[0] == 0xaa, capabilities[1] == 0x55,
       capabilities[6] == 24, configuration.count == 99, (0..<5).contains(profile),
-      (isKeyboard && capabilities[4] == 6 && capabilities[5] == 128 && endpoint.productID == 0x50b8
-        && endpoint.target == 1)
+      (isKeyboard && capabilities[4] == 6 && capabilities[5] == 128
+        && ((endpoint.productID == 0x50b8 && endpoint.target == 1)
+          || (endpoint.productID == 0x509d && endpoint.target == 0)))
         || (!isKeyboard && capabilities[8] == 1 && capabilities[4] == 32 && capabilities[5] == 42
           && ((endpoint.productID == 0x2225 && endpoint.target == 0)
             || (endpoint.productID == 0x50b8 && endpoint.target == 2))),
@@ -47,8 +48,9 @@ public struct Snapshot: Codable, Sendable {
   public func preparedForRestore(on current: Snapshot) throws -> Snapshot {
     try validateStructure()
     try current.validateStructure()
-    guard endpoint.productID == current.endpoint.productID,
-      endpoint.target == current.endpoint.target,
+    let sameRoute = endpoint.productID == current.endpoint.productID && endpoint.target == current.endpoint.target
+    let sameK628 = isKeyboard && current.isKeyboard && endpoint.isKeyboard && current.endpoint.isKeyboard
+    guard sameRoute || sameK628,
       capabilities == current.capabilities, profile == current.profile
     else {
       throw S136Error.message("El respaldo no corresponde a este dispositivo, revisión y perfil.")

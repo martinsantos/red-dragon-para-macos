@@ -443,6 +443,244 @@ func checkModeRequestsDuringActivation() async throws {
   expectEqual(await fixture.sequence, [true, false])
 }
 
+func checkLiveModeSelectiveRecovery() throws {
+  let endpoint = Endpoint(registryID: 1, productID: 0x50b8, target: 1, product: "K628")
+  var caps = [UInt8](repeating: 0, count: 34)
+  caps[0] = 0xaa; caps[1] = 0x55; caps[4] = 6; caps[5] = 128; caps[6] = 24; caps[8] = 2
+  var baseline = Snapshot(endpoint: endpoint, capabilities: caps, configuration: [UInt8](repeating: 0, count: 99), keymap: [UInt8](repeating: 0, count: 384), macroData: [UInt8](repeating: 0, count: 3072), customColors: [UInt8](repeating: 70, count: 384))
+  baseline.configuration[1] = 7
+  let installed = try LiveLightingProfile.prepare(baseline)
+  expectEqual(installed.configuration[1], 0xfe)
+  expectEqual(installed.configuration[2], 4)
+  expectEqual(installed.keymap, baseline.keymap)
+  expectEqual(installed.customColors, baseline.customColors)
+  expectEqual(installed.macroData, baseline.macroData)
+  var current = installed
+  try current.assign(0x200004, to: 1); current.configuration[3] = 3
+  let merged = try LiveLightingProfile.restore(baseline: baseline, installed: installed, current: current)
+  expectEqual(merged.configuration[1], 7); expectEqual(merged.configuration[2], 0)
+  expectEqual(merged.configuration[3], 3); expectEqual(merged.assignment(at: 1), 0x200004)
+  current.configuration[1] = 6
+  expectFailure(try LiveLightingProfile.restore(baseline: baseline, installed: installed, current: current))
+  let micro = try CodexMicroProfile.prepare(baseline, bindings: MicroBinding.defaults, liveLighting: true)
+  expectEqual(micro.configuration[1], 0xfe)
+  let restored = try CodexMicroProfile.restore(baseline: baseline, installed: micro, current: micro)
+  expectEqual(restored.sameContents(as: baseline), true)
+}
+
+func checkStaticSkinAndLauncherRecovery() throws {
+  let endpoint = Endpoint(registryID: 1, productID: 0x50b8, target: 1, product: "K628")
+  var caps = [UInt8](repeating: 0, count: 34)
+  caps[0] = 0xaa; caps[1] = 0x55; caps[4] = 6; caps[5] = 128; caps[6] = 24; caps[8] = 2
+  var original = Snapshot(endpoint: endpoint, capabilities: caps, configuration: [UInt8](repeating: 0, count: 99), keymap: [UInt8](repeating: 0, count: 384), macroData: [UInt8](repeating: 0, count: 3072), customColors: [UInt8](repeating: 70, count: 384))
+  original.configuration[1] = 2; original.configuration[2] = 4
+  let flag = try StaticLightingProfile.prepare(original, skin: .boca, launchers: true)
+  expectEqual(flag.configuration[1], 19); expectEqual(flag.configuration[22], 0)
+  expectEqual(flag.keymap, original.keymap); expectEqual(flag.macroData, original.macroData)
+  var current = flag
+  try current.assign(0x200004, to: 1); current.configuration[3] = 2; current.customColors![300] = 200
+  let restored = try StaticLightingProfile.restore(baseline: original, installed: flag, current: current)
+  expectEqual(restored.configuration[1], 2); expectEqual(restored.assignment(at: 1), 0x200004)
+  expectEqual(restored.customColors![300], 200)
+  current.customColors![99] = 100
+  expectFailure(try StaticLightingProfile.restore(baseline: original, installed: flag, current: current))
+  let micro = try CodexMicroProfile.prepare(original, bindings: MicroBinding.defaults, launcherColors: true)
+  expectEqual(micro.assignment(at: 74), original.assignment(at: 74))
+  for slot in 1...4 { expectEqual(micro.assignment(at: slot), original.assignment(at: slot)) }
+  let microRestored = try CodexMicroProfile.restore(baseline: original, installed: micro, current: micro, launcherColors: true)
+  expectEqual(microRestored.sameContents(as: original), true)
+}
+
+func checkSkinPaletteAndAudio() throws {
+  let original = (0..<384).map { UInt8($0 % 256) }
+  let flag = SkinPalette.colors(for: .boca, baseline: original, launchers: false)
+  for key in KeyboardLayout.keys {
+    expectEqual(Array(flag[key.slot*3..<key.slot*3+3]), key.row == 2 ? [255,190,0] : [0,45,220])
+  }
+  let visible = Set(KeyboardLayout.keys.map(\.slot))
+  for slot in 0..<128 where !visible.contains(slot) {
+    expectEqual(Array(flag[slot*3..<slot*3+3]), Array(original[slot*3..<slot*3+3]))
+  }
+  let silence = AudioSpectrum.bands([Float](repeating: 0, count: 2048), sampleRate: 48000)
+  expectEqual(silence, [Float](repeating: 0, count: 18))
+  let quiet = SkinPalette.colors(for: .music, baseline: original, bands: silence, launchers: false)
+  for key in KeyboardLayout.keys { expectEqual(Array(quiet[key.slot*3..<key.slot*3+3]), [0,0,0]) }
+  for frequency: Double in [1000, 5000] {
+    let tone = (0..<2048).map { Float(0.2 * sin(2 * Double.pi * frequency * Double($0)/48000)) }
+    let bands = AudioSpectrum.bands(tone, sampleRate: 48000)
+    let peak = bands.indices.max { bands[$0] < bands[$1] }!
+    let low = 60 * pow(16000.0/60, Double(peak)/18)
+    let high = 60 * pow(16000.0/60, Double(peak+1)/18)
+    guard frequency >= low - 100, frequency <= high + 100, bands[peak] > 0.5 else { fatalError("Audio spectrum failed tone \(frequency): \(bands)") }
+    let wave = SkinPalette.colors(for: .music, baseline: original, bands: bands, launchers: true)
+    for i in 0..<4 { expectEqual(Array(wave[(i+1)*3..<(i+1)*3+3]), SkinPalette.launcherColors[i]) }
+  }
+}
+actor SkinQueueFixture {
+  var sequence: [KeyboardSkin] = []
+  var active = 0
+  var maximum = 0
+  private var gate: CheckedContinuation<Void, Never>?
+  func transition(_ skin: KeyboardSkin) async -> MicroControlResponse {
+    active += 1; maximum = max(maximum, active); sequence.append(skin)
+    if sequence.count == 1 { await withCheckedContinuation { gate = $0 } }
+    active -= 1
+    return .init(ok: true, status: .init(hardwareActive: skin != .normal, recoveryPending: skin != .normal, skinVisible: true, busy: false, message: skin.title, skin: skin.rawValue))
+  }
+  func release() { gate?.resume(); gate = nil }
+}
+func checkSkinRequestQueue() async {
+  let fixture = SkinQueueFixture()
+  let queue = SkinRequestQueue { await fixture.transition($0) }
+  let first = Task { await queue.submit(nil, current: .normal) }
+  while await fixture.sequence.isEmpty { await Task.yield() }
+  let second = Task { await queue.submit(nil, current: .normal) }
+  while await queue.pendingTargets.last != .codex { await Task.yield() }
+  let third = Task { await queue.submit(nil, current: .normal) }
+  while await queue.pendingTargets.last != .claude { await Task.yield() }
+  let fourth = Task { await queue.submit(nil, current: .normal) }
+  while await queue.pendingTargets.last != .boca { await Task.yield() }
+  let fifth = Task { await queue.submit(nil, current: .normal) }
+  while await queue.pendingTargets.last != .music { await Task.yield() }
+  let sixth = Task { await queue.submit(nil, current: .normal) }
+  while await queue.pendingTargets.last != .normal { await Task.yield() }
+  await fixture.release()
+  let results = await [first.value, second.value, third.value, fourth.value, fifth.value, sixth.value]
+  expectEqual(results.map { $0.status.skin }, ["apps", "normal", "normal", "normal", "normal", "normal"])
+  expectEqual(results.last!.status.busy, false)
+  expectEqual(results.last!.status.requestedSkin, nil)
+  expectEqual(await fixture.sequence, [.apps, .normal])
+  expectEqual(await fixture.maximum, 1)
+  let toggles = SkinQueueFixture()
+  let toggleQueue = SkinRequestQueue { await toggles.transition($0) }
+  let on = Task { await toggleQueue.submit(nil, current: .normal, toggleCodex: true) }
+  while await toggles.sequence.isEmpty { await Task.yield() }
+  let off = Task { await toggleQueue.submit(nil, current: .normal, toggleCodex: true) }
+  while await toggleQueue.pendingTargets.count < 2 { await Task.yield() }
+  await toggles.release(); _ = await on.value; _ = await off.value
+  expectEqual(await toggles.sequence, [.codex, .normal])
+}
+
+func checkDirectSkinTransitions() throws {
+  let baseline = microFixture()
+  let bindings = MicroBinding.defaults
+  let codex = try KeyboardSkinSession.plan(.codex, from: nil, current: baseline,
+    bindings: bindings, states: [.thinking, .attention, .complete, .idle, .failed, .disconnected], launchers: true)
+  let boca = try KeyboardSkinSession.plan(.boca, from: codex.session, current: codex.snapshot,
+    bindings: bindings, states: nil, launchers: true)
+  expectEqual(boca.snapshot.keymap, baseline.keymap)
+  expectEqual(boca.session!.baseline.sameContents(as: baseline), true)
+  let back = try KeyboardSkinSession.plan(.codex, from: boca.session, current: boca.snapshot,
+    bindings: bindings, states: nil, launchers: false)
+  for slot in 1...4 { expectEqual(Array(back.snapshot.customColors![slot*3..<slot*3+3]), Array(baseline.customColors![slot*3..<slot*3+3])) }
+  let normal = try KeyboardSkinSession.plan(.normal, from: back.session, current: back.snapshot,
+    bindings: bindings, states: nil, launchers: false)
+  expectEqual(normal.snapshot.sameContents(as: baseline), true)
+  expectEqual(normal.session == nil, true)
+  var outside = boca.snapshot
+  outside.configuration[3] = 4; try outside.assign(0x200004, to: 18)
+  let merged = try KeyboardSkinSession.plan(.codex, from: boca.session, current: outside,
+    bindings: bindings, states: nil, launchers: false)
+  expectEqual(merged.snapshot.configuration[3], 4); expectEqual(merged.snapshot.assignment(at: 18), 0x200004)
+  var conflict = boca.snapshot; conflict.customColors![18*3] = 77
+  expectFailure(try KeyboardSkinSession.plan(.normal, from: boca.session, current: conflict,
+    bindings: bindings, states: nil, launchers: false))
+}
+
+func checkInterruptedSkinTransition() throws {
+  let baseline = microFixture()
+  let boca = try KeyboardSkinSession.plan(.boca, from: nil, current: baseline, bindings: MicroBinding.defaults, states: nil, launchers: false)
+  let codex = try KeyboardSkinSession.plan(.codex, from: boca.session, current: boca.snapshot, bindings: MicroBinding.defaults, states: nil, launchers: false)
+  let journal = SkinTransitionJournal(previous: boca.session, proposed: codex.session, before: boca.snapshot, after: codex.snapshot)
+  // Failed write rolled back: Boca survives, with the original baseline retained.
+  expectEqual(try journal.resolved(on: boca.snapshot)?.skin, .boca)
+  // Crash after device commit and before journal commit: recover Codex, not an invented Normal.
+  expectEqual(try journal.resolved(on: codex.snapshot)?.skin, .codex)
+  var partial = codex.snapshot; partial.configuration[2] = 0
+  expectFailure(try journal.resolved(on: partial))
+  let normal = try KeyboardSkinSession.plan(.normal, from: codex.session, current: codex.snapshot, bindings: MicroBinding.defaults, states: nil, launchers: false)
+  let exiting = SkinTransitionJournal(previous: codex.session, proposed: nil, before: codex.snapshot, after: normal.snapshot)
+  expectEqual(try exiting.resolved(on: baseline) == nil, true)
+}
+
+func checkWiredK628Recovery() throws {
+  expectEqual(KeyboardLayout.keys.contains { $0.slot == LiveLightingProfile.refreshOffset / 3 }, false)
+  let wireless = microFixture()
+  var wired = wireless
+  wired.endpoint = Endpoint(registryID: 99, productID: 0x509d, target: 0, product: "Gaming KB")
+  try wired.validateStructure()
+  expectEqual(wired.endpoint.supportsLiveLighting, true)
+  let restored = try wireless.preparedForRestore(on: wired)
+  expectEqual(restored.endpoint, wired.endpoint)
+  expectEqual(restored.sameContents(as: wireless), true)
+  var unknown = wired
+  unknown.endpoint = Endpoint(registryID: 100, productID: 0x509e, target: 0, product: "Unknown")
+  expectFailure(try unknown.validateStructure())
+  var otherRevision = wired; otherRevision.capabilities[20] = 1
+  expectFailure(try wireless.preparedForRestore(on: otherRevision))
+}
+
+func checkApplicationControlsAndRecovery() throws {
+  let baseline = microFixture()
+  var current = baseline
+  var session: KeyboardSkinSession?
+  for skin in [KeyboardSkin.apps, .codex, .claude, .boca, .music, .apps, .normal] {
+    let plan = try KeyboardSkinSession.plan(skin, from: session, current: current,
+      bindings: MicroBinding.defaults, states: nil, launchers: true, controlPad: true, launcherKeys: true)
+    if skin != .normal {
+      for index in 0..<4 { expectEqual(plan.snapshot.assignment(at: index+1), ApplicationControlProfile.launcherAssignments[index]) }
+      if skin.hasActionPad {
+        for index in 0..<6 { expectEqual(plan.snapshot.assignment(at: CodexMicroProfile.slots[index]), ApplicationControlProfile.padAssignments[index]) }
+      } else {
+        for slot in CodexMicroProfile.slots { expectEqual(plan.snapshot.assignment(at: slot), baseline.assignment(at: slot)) }
+      }
+    }
+    expectEqual(plan.snapshot.assignment(at: 74), baseline.assignment(at: 74))
+    expectEqual(plan.snapshot.macroData, baseline.macroData)
+    current = plan.snapshot; session = plan.session
+  }
+  expectEqual(current.sameContents(as: baseline), true)
+  let apps = try KeyboardSkinSession.plan(.apps, from: nil, current: baseline, bindings: MicroBinding.defaults, states: nil, launchers: true, controlPad: true, launcherKeys: true)
+  var conflict = apps.snapshot; try conflict.assign(0x200004, to: 1)
+  expectFailure(try apps.session!.restored(on: conflict))
+  let disabled = try KeyboardSkinSession.plan(.apps, from: apps.session, current: apps.snapshot, bindings: MicroBinding.defaults, states: nil, launchers: false, controlPad: true, launcherKeys: true)
+  expectEqual(disabled.snapshot.keymap, baseline.keymap)
+  expectEqual(disabled.session?.launcherKeys, false)
+  expectEqual(SkinPalette.launcherColors, [[30,110,255],[255,140,70],[155,90,255],[40,220,80]])
+}
+
+func checkLegacyAndChatPadRecovery() throws {
+  let baseline = microFixture()
+  let legacy = try KeyboardSkinSession.plan(.codex, from: nil, current: baseline,
+    bindings: MicroBinding.defaults, states: nil, launchers: true)
+  let encoded = try JSONEncoder().encode(legacy.session!)
+  let decoded = try JSONDecoder().decode(KeyboardSkinSession.self, from: encoded)
+  expectEqual(decoded.launcherKeys, false)
+  expectEqual(try decoded.restored(on: legacy.snapshot).sameContents(as: baseline), true)
+  let chats = try KeyboardSkinSession.plan(.codex, from: decoded, current: legacy.snapshot,
+    bindings: MicroBinding.defaults, states: Array(repeating: .attention, count: 6), launchers: true, controlPad: true, launcherKeys: true, chatPad: true)
+  for index in 0..<6 {
+    let slot = CodexMicroProfile.slots[index]
+    expectEqual(chats.snapshot.assignment(at: slot), ApplicationControlProfile.padAssignments[index])
+    expectEqual(Array(chats.snapshot.customColors![slot*3..<slot*3+3]), MicroState.attention.rgb)
+  }
+  expectEqual(try chats.session!.restored(on: chats.snapshot).sameContents(as: baseline), true)
+}
+
+func checkApplicationRouting() {
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 2, remembered: 1, focused: 0, isFrontmost: false), 1)
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 2, remembered: 1, focused: 1, isFrontmost: true), 0)
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 2, remembered: 0, focused: 0, isFrontmost: true), 1)
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 0, remembered: 0, focused: 0, isFrontmost: true), nil)
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 1, remembered: 99, focused: nil, isFrontmost: true), 0)
+  expectEqual(ApplicationProfileRouting.skin(for: "com.openai.codex"), .codex)
+  expectEqual(ApplicationProfileRouting.skin(for: "com.anthropic.claudefordesktop"), .claude)
+  expectEqual(ApplicationProfileRouting.skin(for: "com.google.Chrome"), .apps)
+  expectEqual(ApplicationProfileRouting.skin(for: "com.apple.systempreferences"), nil)
+  expectEqual(ApplicationPadAction.actions(for: .codex), [.usage,.attention,.dictation,.model,.review,.newChat])
+  expectEqual(ApplicationPadAction.actions(for: .claude).last, .settings)
+}
+
 let checks = ProtocolChecks()
 let physicalKeys = KeyboardLayout.keys
 expectEqual(physicalKeys.count, 78)
@@ -472,4 +710,14 @@ try await checkLocalReaderPartialLinesAndTruncation()
 try checkMicroAttentionTransitions()
 try checkMicroControlBoundary()
 try await checkModeRequestsDuringActivation()
-print("PASS: 18 protocol, backup, lighting, Micro, router, notification and local command checks.")
+try checkLiveModeSelectiveRecovery()
+try checkStaticSkinAndLauncherRecovery()
+try checkSkinPaletteAndAudio()
+await checkSkinRequestQueue()
+try checkDirectSkinTransitions()
+try checkInterruptedSkinTransition()
+try checkWiredK628Recovery()
+try checkApplicationControlsAndRecovery()
+try checkLegacyAndChatPadRecovery()
+checkApplicationRouting()
+print("PASS: 28 protocol, recovery, lighting, routing, command, skin queue and audio checks.")
