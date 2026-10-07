@@ -53,7 +53,7 @@ struct CLI {
         for endpoint in endpoints { print(endpoint.id, endpoint.title) }
         return
       }
-      guard ["read", "restore", "verify-roundtrip", "verify-macro", "verify-micro", "verify-live", "verify-live-mode", "verify-boca"].contains(command),
+      guard ["read", "restore", "verify-roundtrip", "verify-macro", "verify-micro", "verify-live", "verify-live-mode", "verify-live-hold", "verify-boca"].contains(command),
         CommandLine.arguments.count >= 3,
         let endpoint = endpoints.first(where: { $0.id == CommandLine.arguments[2] })
       else {
@@ -65,6 +65,35 @@ struct CLI {
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
       encoder.dateEncodingStrategy = .iso8601
+      if command == "verify-live-hold" {
+        guard snapshot.isKeyboard, endpoint.supportsLiveLighting, CommandLine.arguments.count == 4 else {
+          throw S136Error.message("Uso: verify-live-hold ID_K628_USB DIRECTORIO · Enter restaura el respaldo.")
+        }
+        let folder = URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try SnapshotFile.save(snapshot, to: folder.appendingPathComponent("before-live.json"))
+        let live = try await controller.apply(original: snapshot, edited: LiveLightingProfile.prepare(snapshot))
+        let frame: [UInt8] = (0..<128).flatMap { _ in [0, 80, 255] }
+        do {
+          try await controller.sendLiveColors(on: live, colors: frame)
+          print("READY: azul temporal y refresco de un byte durante 5 segundos. Después restaura Boca."); fflush(stdout)
+          let deadline = Date().addingTimeInterval(5)
+          for _ in 0..<25 {
+            guard Date() < deadline else { break }
+            try await controller.refreshLiveColors(on: live, colors: frame)
+            try await Task.sleep(for: .milliseconds(100))
+          }
+          try await controller.stopLiveColors(on: live)
+          let restored = try await controller.apply(original: live, edited: snapshot)
+          guard restored.sameContents(as: snapshot) else { throw S136Error.message("Restauración sin confirmar.") }
+          print("PASS: RGB temporal detenido y todas las tablas restauradas byte por byte.")
+        } catch {
+          try? await controller.stopLiveColors(on: live)
+          _ = try? await controller.apply(original: live, edited: snapshot)
+          throw error
+        }
+        return
+      }
       if command == "verify-boca" {
         guard snapshot.isKeyboard, CommandLine.arguments.count == 4 else { throw S136Error.message("Uso: verify-boca ID DIRECTORIO") }
         let folder = URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true)
@@ -90,7 +119,7 @@ struct CLI {
         try SnapshotFile.save(snapshot, to: folder.appendingPathComponent("before-live.json"))
         var live = snapshot
         if command == "verify-live-mode" {
-          var planned = snapshot; planned.configuration[1] = 29; planned.configuration[2] = 4
+          let planned = try LiveLightingProfile.prepare(snapshot)
           live = try await controller.apply(original: snapshot, edited: planned)
           try SnapshotFile.save(live, to: folder.appendingPathComponent("installed-live-mode.json"))
         }

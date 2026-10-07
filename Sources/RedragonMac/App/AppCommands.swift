@@ -18,7 +18,7 @@ struct AppCommands: Commands {
     CommandMenu("Skins") {
       Button("Siguiente skin · ⌘⌥F4") { skins.select(nil) }.disabled(!skins.canSwitch)
       ForEach(KeyboardSkin.allCases) { skin in
-        Button("Activar \(skin.title)") { skins.select(skin) }.disabled(!skins.canSwitch)
+        Button("Activar \(skin.title)") { skins.select(skin) }.disabled(!skins.canSwitch || (skin == .music && !skins.musicAvailable))
       }
       Divider()
       Button("Mostrar Skins") { skins.galleryVisible = true; skins.showWindow() }

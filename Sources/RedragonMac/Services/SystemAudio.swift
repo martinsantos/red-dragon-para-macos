@@ -31,7 +31,7 @@ final class SystemAudio: ObservableObject {
         Task { @MainActor in
           guard let self, self.generation == revision else { return }
           self.bands = values
-          self.message = values.contains(where: { $0 > 0 }) ? "Música detectada · RGB temporal" : "En silencio · esperando música"
+          self.message = values.contains(where: { $0 > 0 }) ? "Audio del sistema detectado" : "En silencio · esperando música"
         }
       } stopped: { [weak self] error in
         Task { @MainActor in

@@ -2,7 +2,7 @@
 
 Configurador nativo de macOS para el **Redragon S136: teclado K628 y mouse M693**. Permite leer y guardar ajustes del kit mediante USB HID, con respaldos y verificación de las escrituras.
 
-**Proyecto comunitario independiente, versión preliminar 0.5.0.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
+**Proyecto comunitario independiente, versión preliminar 0.5.1.** Redragon no ha aprobado ni publicado esta aplicación. Las macros están disponibles como función experimental: su almacenamiento y asignación se verificaron, pero su ejecución física sigue pendiente.
 
 [Descargar versión preliminar](https://github.com/martinsantos/red-dragon-para-macos/releases) · [Validación y protocolo](docs/VALIDATION.md) · [Información para Redragon](docs/REDRAGON-ADOPTION.md)
 
@@ -24,9 +24,9 @@ Las pruebas de hardware verifican los bytes guardados y restaurados. La lectura 
 
 ## Usar la app
 
-Requiere **macOS 14 o posterior**. La descarga 0.5.0 incluida es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
+Requiere **macOS 14 o posterior**. La compilación local 0.5.1 es **arm64 para Apple Silicon**, firmada localmente y sin notarización. El código fuente permite compilar para la arquitectura del Mac utilizado.
 
-1. Conectá el receptor USB del kit y encendé el teclado en **2,4 GHz**. Para configurar el mouse en la conexión validada, usá su cable USB.
+1. Conectá el teclado por cable de datos con su selector en **OFF**, o usá el receptor con el teclado en **2,4 GHz**. Música requiere cable. Para configurar el mouse en la conexión validada, usá su cable USB.
 2. Abrí `RedragonMac.app`.
 3. En **Ajustes del Sistema → Privacidad y seguridad → Monitoreo de entrada**, agregá y habilitá la app. Puede aparecer como **RED DRAGON PARA MACOS** o **RedragonMac.app**. En **Respaldo** hay botones para abrir el ajuste y mostrar la app en Finder.
 4. Salí con **⌘Q**, volvé a abrirla y pulsá **Detectar**.
@@ -38,18 +38,18 @@ Los respaldos se guardan en `~/Library/Application Support/RedragonMac/Backups`.
 
 La interfaz de configuración descarta los informes normales de teclas y movimiento. El modo Micro registra únicamente las teclas de acción asignadas del pad; no guarda pulsaciones. El enrutador conserva identificadores y estados derivados de registros locales, sin exportar conversaciones. El conector avanzado opcional permite observar un App Server en localhost.
 
-## Skins y accesos rápidos (0.5.0)
+## Skins y accesos rápidos (0.5.1)
 
-Abrí **Skins** en la misma ventana. Elegí **Normal**, **Codex Micro**, **Boca** o **Música**, o pulsá **⌘⌥F4** para recorrerlas en ese orden. En el K628 sin fila F separada, el equivalente esperado es **Win + Alt + Fn + 4**; la capa Fn y el atajo físico deben comprobarse en tu unidad. El nombre aparece en la app y, si ya permitiste notificaciones, como aviso de macOS. Las solicitudes repetidas se ejecutan en orden. La animación Música del teclado sigue pendiente de validación por USB; el atajo la omite hasta disponer de soporte validado.
+Abrí **Skins** en la misma ventana. Elegí **Normal**, **Codex Micro**, **Boca** o **Música**, o pulsá **⌘⌥F4** para recorrerlas. En el K628 sin fila F separada, el equivalente esperado es **Win + Alt + Fn + 4**; la capa Fn y el atajo físico deben comprobarse en tu unidad. El nombre aparece en la app y, si ya permitiste notificaciones, como aviso de macOS. Si elegís varias skins durante una escritura, termina la operación en curso y aplica tu última elección. Codex y Boca pasan directamente de una a otra; Normal recupera los ajustes previos. Música se omite en el atajo cuando no hay USB directo.
 
 - **Normal:** detiene el RGB temporal y recupera tus luces y teclas anteriores.
 - **Codex Micro:** seis botones del pad numérico y colores de estados locales. La paleta de los seis botones sigue los estados locales y se verifica después de guardarla.
 - **Boca:** azul, franja amarilla sobre la fila central y azul. La paleta se guarda una vez al activar la skin y se recupera al volver a Normal.
-- **Música:** ondas en columnas según 18 bandas del audio del sistema; silencio apaga las ondas. Pulsá **Conectar audio del sistema** para pedir el permiso de macOS de **Grabación de pantalla y audio del sistema**. La app registra solo un output de audio de ScreenCaptureKit, no un output de pantalla ni micrófono, y procesa niveles en memoria sin guardar grabaciones. Cambiar de skin o salir detiene la captura. Las ondas pueden probarse en pantalla mientras el control físico por USB está pendiente.
+- **Música:** conecta automáticamente el audio y dibuja ondas en columnas según 18 bandas; en silencio apaga las ondas. Requiere el K628 por cable y el permiso de macOS de **Grabación de pantalla y audio del sistema**. La app registra solo un output de audio de ScreenCaptureKit, no un output de pantalla ni micrófono, y procesa niveles en memoria sin guardar grabaciones. Cambiar de skin o salir detiene la captura. El panel permite comprobar el audio independientemente; la validación física de las ondas se documenta en VALIDATION.md.
 
-El selector de conexión del S136 debe estar en **OFF** para trabajar por cable: no lleva una posición rotulada USB. [Manual oficial](https://cdn.shopify.com/s/files/1/0012/4957/4961/files/Redragon_BS136_Combo_User_Manual.pdf?v=1724739574). El soporte del teclado por cable necesita identificar y validar esa interfaz; conectar un cable que solo carga no la expone a macOS.
+El selector de conexión del S136 debe estar en **OFF** para trabajar por cable: no lleva una posición rotulada USB. [Manual oficial](https://cdn.shopify.com/s/files/1/0012/4957/4961/files/Redragon_BS136_Combo_User_Manual.pdf?v=1724739574). La interfaz identificada es `320F:509D`; la app comprueba también las capacidades del firmware. Un cable que solo carga no la expone a macOS.
 
-Boca utiliza el modo Personalizado (19), la paleta 1 y un respaldo previo. El código experimental de Música utiliza el modo de computadora (29), RGB temporal `0x12` y fin `0x13`; su salida física queda deshabilitada por el receptor mientras se valida por USB. La app conserva un registro de recuperación antes de escribir el modo y lo restaura al volver a Normal o salir normalmente. Si una restauración falla, el registro permanece y la app no confirma la salida. Después de un cierre forzado, abrila y elegí **Normal · restaurar**. Los mapas de teclas y las macros no cambian con Boca/Música.
+Boca utiliza el modo Personalizado (19) y la paleta 1. Música usa el modo de firmware `FE`: los efectos 29/30 de la interfaz del fabricante se traducen a `FE` antes de transmitirse. Los cuadros usan el buffer temporal `0x12`, su refresco y fin `0x13`, sin guardar cada cuadro en la paleta persistente. La sesión conserva un único respaldo original y un registro antes de cada escritura. Una lectura determina qué skin sobrevivió a un cierre inesperado. Un cambio fallido conserva o recupera la skin anterior; si no puede verificarse, la app conserva el registro y lo informa. Boca/Música no reasignan teclas ni modifican macros.
 
 **Accesos globales F1–F4** tiene un interruptor separado. Están disponibles con cualquier skin mientras la app está abierta; al desactivarlos dejan de reservarse esas teclas.
 
@@ -125,9 +125,10 @@ La skin usa la convención visual de [Codex Micro](https://learn.chatgpt.com/doc
 | Dispositivo | VID:PID | Conexión |
 |---|---|---|
 | Receptor del S136 | `320F:50B8` | Teclado en 2,4 GHz validado |
+| Teclado K628 | `320F:509D` | USB por cable identificado y leído |
 | Mouse M693 | `320F:2225` | USB por cable validado |
 
-El mouse por receptor se detecta, pero aún requiere pruebas. Bluetooth, teclado por cable, otras revisiones, selección de otros perfiles o bancos de colores, DPI arbitrarios, X/Y independientes y efectos de pantalla quedan pendientes. La captura de música está implementada y requiere validación física completa. La app rechaza estructuras de hardware no reconocidas.
+El mouse por receptor se detecta, pero aún requiere pruebas. Bluetooth, otras revisiones, selección de otros perfiles o bancos de colores, DPI arbitrarios, X/Y independientes y efectos de pantalla quedan pendientes. La captura de música y el RGB temporal por cable están implementados; los resultados de observación física se indican por separado. La app rechaza estructuras de hardware no reconocidas.
 
 ## Compilar y comprobar
 

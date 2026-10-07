@@ -102,10 +102,10 @@ public enum CodexMicroProfile {
       try result.setKeyColor(binding.action == .recentChat ? [230, 230, 230] : [165, 95, 255], at: slots[index])
     }
     if result.configuration[2] == 0 { result.configuration[2] = 4 }
-    if liveLighting { result.configuration[1] = 29 }
     if launcherColors {
       for i in 0..<4 { try result.setKeyColor(SkinPalette.launcherColors[i], at: i+1) }
     }
+    if liveLighting { result.configuration[1] = 0xfe }
     return result
   }
 

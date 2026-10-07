@@ -24,7 +24,10 @@ final class DeviceStore: ObservableObject {
   @Published private(set) var backupURL: URL?
   var liveMicroPalette = false
   var microLauncherColors = false
+  var microUpdateHandler: (() -> Void)?
+  var fullMicroRestoreHandler: (() -> Void)?
   @Published var liveSkinOwnsKeyboard = false
+  var skinOwnsSelected: Bool { liveSkinOwnsKeyboard && original?.isKeyboard == true }
   let previewMode: Bool
 
   var changed: Bool {
@@ -34,7 +37,7 @@ final class DeviceStore: ObservableObject {
   var selectedEndpoint: Endpoint? { endpoints.first { $0.id == selectedID } }
   var needsInputPermission: Bool { error?.contains("e00002e2") == true }
   var canRead: Bool { !busy && !previewMode && !changed }
-  var canApply: Bool { !busy && !previewMode && changed && !microOwnsSelected && !liveSkinOwnsKeyboard }
+  var canApply: Bool { !busy && !previewMode && changed && !microOwnsSelected && !skinOwnsSelected }
   var canDiscard: Bool { !busy && changed }
   var microOwnsSelected: Bool {
     guard let recovery = microRecovery, let original else { return false }
@@ -79,7 +82,7 @@ final class DeviceStore: ObservableObject {
     Task {
       endpoints = await controller.endpoints()
       if !endpoints.contains(where: { $0.id == selectedID }) {
-        selectedID = endpoints.first(where: { $0.target == 1 })?.id ?? endpoints.first?.id
+        selectedID = endpoints.first(where: { $0.supportsLiveLighting })?.id ?? endpoints.first(where: { $0.isKeyboard })?.id ?? endpoints.first?.id
         original = nil
         edited = nil
       }
@@ -127,7 +130,7 @@ final class DeviceStore: ObservableObject {
   }
 
   func edit(_ action: (inout Snapshot) throws -> Void) {
-    guard !busy, !microOwnsSelected && !liveSkinOwnsKeyboard, var snapshot = edited else { return }
+    guard !busy, !microOwnsSelected && !skinOwnsSelected, var snapshot = edited else { return }
     do {
       try action(&snapshot)
       edited = snapshot
@@ -157,7 +160,7 @@ final class DeviceStore: ObservableObject {
   }
 
   func restoreBackup() {
-    guard !busy, !changed, !microOwnsSelected && !liveSkinOwnsKeyboard, let original,
+    guard !busy, !changed, !microOwnsSelected && !skinOwnsSelected, let original,
       let url = system.chooseBackup(in: backups.directory)
     else { return }
     do {
@@ -169,7 +172,7 @@ final class DeviceStore: ObservableObject {
   }
   /// Apply only the lighting fields; preserve unrelated pending key/macro edits.
   func applySolidColor(_ rgb: [UInt8]) {
-    guard !busy, !microOwnsSelected && !liveSkinOwnsKeyboard, let original, let edited else { return }
+    guard !busy, !microOwnsSelected && !skinOwnsSelected, let original, let edited else { return }
     if previewMode {
       edit { try $0.setSolidColor(rgb) }
       status = "Vista previa del color · sin escrituras al dispositivo."
@@ -210,7 +213,7 @@ final class DeviceStore: ObservableObject {
   func discard() { edited = original }
 
   func applyKeyColor(_ rgb: [UInt8], at slot: Int) {
-    guard !busy, !microOwnsSelected && !liveSkinOwnsKeyboard, let original, let edited else { return }
+    guard !busy, !microOwnsSelected && !skinOwnsSelected, let original, let edited else { return }
     if previewMode {
       edit { try $0.setVisibleKeyColor(rgb, at: slot) }
       status = "Vista previa del color de la tecla · sin escrituras al dispositivo."
@@ -261,8 +264,8 @@ final class DeviceStore: ObservableObject {
     status = "Leyendo el K628 para cambiar de modo…"
     defer { busy = false }
     endpoints = await controller.endpoints()
-    guard let keyboard = endpoints.first(where: { $0.target == 1 }) else {
-      throw S136Error.message("Conectá el receptor del K628 y encendé el teclado en 2,4 GHz.")
+    guard let keyboard = endpoints.first(where: { $0.supportsLiveLighting }) ?? endpoints.first(where: { $0.isKeyboard }) else {
+      throw S136Error.message("Conectá el K628 por cable (selector OFF) o encendelo en 2,4 GHz con su receptor.")
     }
     selectedID = keyboard.id
     original = nil
@@ -311,6 +314,7 @@ final class DeviceStore: ObservableObject {
   }
 
   func updateMicro(_ bindings: [MicroBinding], states: [MicroState]? = nil) {
+    if let microUpdateHandler { microUpdateHandler(); return }
     guard canRestoreMicro, let original, let previous = microRecovery else { return }
     busy = true
     Task {
@@ -383,6 +387,7 @@ final class DeviceStore: ObservableObject {
   }
 
   func restoreFullMicroBackup() {
+    if let fullMicroRestoreHandler { fullMicroRestoreHandler(); return }
     guard canRestoreMicro, let current = original, let recovery = microRecovery else { return }
     busy = true
     error = nil
@@ -410,6 +415,25 @@ final class DeviceStore: ObservableObject {
     status = "Paleta de la skin guardada y releída."
     return verified
   }
+  /// Recovery is owned by KeyboardSkinController; this mirror only registers Micro inputs.
+  func adoptSkinSession(_ session: KeyboardSkinSession?, confirmed: Bool) {
+    liveSkinOwnsKeyboard = session != nil
+    if let session, session.skin == .codex {
+      microRecovery = MicroRecovery(baseline: session.baseline, installed: session.installed,
+        bindings: session.bindings, backupURL: backupURL ?? backups.directory,
+        launcherColors: session.launcherColors)
+      microHardwareConfirmed = confirmed
+    } else { microRecovery = nil; microHardwareConfirmed = false }
+    if confirmed {
+      switch session?.skin ?? .normal {
+      case .normal: status = "Teclas y luces anteriores restauradas y verificadas."
+      case .codex: status = "Codex Micro activo · Num 1–6 · respaldo guardado."
+      case .boca: status = "Boca activa · paleta guardada y verificada."
+      case .music: status = "Música activa · audio del sistema · RGB temporal por USB."
+      }
+    }
+  }
+  func clearLegacySkinRecovery() throws { try microRepository.clear() }
   func installLiveMode(_ baseline: Snapshot) async throws -> Snapshot {
     guard !busy, !changed, !previewMode else { throw S136Error.message("Esperá antes de activar el modo de luces de computadora.") }
     busy = true; defer { busy = false }
@@ -431,17 +455,18 @@ final class DeviceStore: ObservableObject {
     original = verified; edited = verified
     status = "Modo de luces anterior restaurado y verificado."
   }
-  func sendLiveColors(_ colors: [UInt8], known: Snapshot) async throws {
+  func sendLiveColors(_ colors: [UInt8], known: Snapshot, refreshOnly: Bool = false) async throws {
     guard !busy, !changed, !previewMode else { throw S136Error.message("Esperá la operación actual antes de enviar luces temporales.") }
     busy = true; defer { busy = false }
-    try await controller.sendLiveColors(on: known, colors: colors)
+    if refreshOnly { try await controller.refreshLiveColors(on: known, colors: colors) }
+    else { try await controller.sendLiveColors(on: known, colors: colors) }
   }
   func stopLiveColors(known: Snapshot) async throws {
     guard !busy, !changed, !previewMode else { throw S136Error.message("Esperá la operación actual antes de restaurar las luces.") }
     busy = true; defer { busy = false }
     // Registry IDs can change when reconnecting. Match the saved hardware and profile.
     let devices = await controller.endpoints()
-    guard let endpoint = devices.first(where: { $0.target == 1 && $0.productID == known.endpoint.productID }) else {
+    guard let endpoint = devices.first(where: { $0.isKeyboard && $0.productID == known.endpoint.productID }) else {
       throw S136Error.message("Reconectá el K628 para detener la skin y recuperar sus luces.")
     }
     var connected = known; connected.endpoint = endpoint

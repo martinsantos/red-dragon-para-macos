@@ -10,6 +10,7 @@ final class MicroModeController: ObservableObject {
   let micro: MicroStore
   let notifications: MicroNotifications
   var controlHandler: ((MicroCommand) async -> MicroControlResponse)?
+  var synchronizeHandler: (() -> Void)?
   var externalTransitioning = false
   @Published private(set) var transitioning = false
   @Published private(set) var requestedMode: Bool?
@@ -190,6 +191,7 @@ final class MicroModeController: ObservableObject {
   }
   func dismissAttention() { notifications.clear(attentionNumbers); attentionNumbers = [] }
   private func synchronizeLights() {
+    if let synchronizeHandler { synchronizeHandler(); return }
     guard !externalTransitioning, !transitioning, micro.syncLights, store.canRestoreMicro, store.error == nil,
       store.microRecovery?.bindings == micro.bindings, let current = store.original,
       let planned = try? CodexMicroProfile.withStates(micro.hardwareStates, on: current),

@@ -3,7 +3,7 @@ import AppKit
 import Combine
 import RedragonCore
 
-/// All skins share one transition queue and one physical keyboard owner.
+/// Buttons, shortcuts, CLI and Codex updates share one transaction owner.
 @MainActor
 final class KeyboardSkinController: ObservableObject {
   let mode = MicroModeController()
@@ -12,67 +12,88 @@ final class KeyboardSkinController: ObservableObject {
   @Published private(set) var active: KeyboardSkin = .normal
   @Published private(set) var confirmed = false
   @Published private(set) var pending = 0
+  @Published private(set) var requested: KeyboardSkin?
+  @Published private(set) var transitionError: String?
   @Published var galleryVisible = true
   @Published var audioPanelVisible = false
-  @Published private(set) var musicMessage = "La animación del teclado por USB requiere validación. Por el receptor no cambió las luces."
   @Published private(set) var notice: String?
   @Published private(set) var shortcutMessage = "⌘⌥F4 · siguiente skin (Win + Alt + Fn + 4 en K628)"
-  private var recovery: LiveSkinRecovery?
-  private var liveKnown: Snapshot?
-  private let repository = LiveSkinRepository()
+  private var state = SkinSessionState()
+  private let repository = SkinSessionRepository()
   private let hotkeys = SkinHotkeys()
   private var subscriptions: Set<AnyCancellable> = []
   private var worker: Task<Void, Never>?
   private var started = false
   private var quitting = false
+  private var refreshing = false
+  private var recoveryLoadFailed = false
   private var noticeRevision = 0
-  private lazy var requests = SkinRequestQueue { [weak self] target in
+  private lazy var requests = SkinRequestQueue(transition: { [weak self] target in
     guard let self else { return .init(ok: false, status: .init(hardwareActive: false, recoveryPending: false, skinVisible: false, busy: false, message: "App cerrada."), error: "App cerrada.") }
     return await self.transition(to: target)
-  }
+  }, changed: { [weak self] target in await self?.setRequested(target) })
   var store: DeviceStore { mode.store }
   var busy: Bool { pending > 0 }
-  var canSwitch: Bool { !quitting && mode.canSwitch }
+  var canSwitch: Bool { !quitting && !recoveryLoadFailed && mode.canSwitch }
+  var musicAvailable: Bool { store.endpoints.contains(where: { $0.supportsLiveLighting }) }
+  var musicMessage: String {
+    musicAvailable ? "USB directo detectado. La skin conecta el audio y envía ondas al teclado."
+      : "Las ondas físicas requieren USB directo: conectá un cable de datos y poné el selector del K628 en OFF. Podés comprobar el audio aquí sin cambiar tu skin."
+  }
   var status: MicroControlStatus {
     var value = mode.status
     value.hardwareActive = confirmed && active != .normal
-    value.recoveryPending = recovery != nil || store.microRecovery != nil
+    value.recoveryPending = state.session != nil || state.pending != nil
     value.busy = busy || store.busy
-    value.skin = active.rawValue
+    value.skin = active.rawValue; value.requestedSkin = requested?.rawValue
+    value.message = busy ? "Cambiando a \((requested ?? active).title)…" : store.status
     value.audioConnected = audio.connected; value.audioLevel = audio.bands.max() ?? 0; value.audioMessage = audio.message
     return value
   }
   init() {
     do {
-      recovery = try repository.load()
-      if let recovery { active = recovery.skin; liveKnown = recovery.baseline; store.liveSkinOwnsKeyboard = true }
-      else if store.microRecovery != nil { active = .codex }
-    } catch { store.error = "No se pudo cargar la recuperación de skin: \(error.localizedDescription)" }
-    store.liveMicroPalette = false
-    store.microLauncherColors = launchers.enabled
+      if let saved = try repository.load() { state = saved }
+      else {
+        let live = try LiveSkinRepository().load()
+        let micro = store.microRecovery
+        guard live == nil || micro == nil else { throw S136Error.message("Hay dos respaldos antiguos pendientes. Se conservan para recuperar el teclado antes de cambiar de skin.") }
+        if let live { state.session = .init(baseline: live.baseline, installed: live.installed, skin: live.skin) }
+        else if let micro { state.session = .init(baseline: micro.baseline, installed: micro.installed, skin: .codex, launcherColors: micro.launcherColors == true, bindings: micro.bindings) }
+        try repository.save(state)
+        try LiveSkinRepository().clear(); try store.clearLegacySkinRecovery()
+      }
+      active = state.session?.skin ?? .normal
+      store.adoptSkinSession(state.session, confirmed: false)
+    } catch { recoveryLoadFailed = true; transitionError = "No se pudo cargar la recuperación: \(error.localizedDescription)" }
     mode.externalTransitioning = true
     mode.controlHandler = { [weak self] command in
       guard let self else { return .init(ok: false, status: .init(hardwareActive: false, recoveryPending: false, skinVisible: false, busy: false, message: "App cerrada."), error: "App cerrada.") }
       return await self.execute(command)
     }
+    mode.synchronizeHandler = { [weak self] in self?.refreshCodex() }
+    store.microUpdateHandler = { [weak self] in self?.select(.codex) }
+    store.fullMicroRestoreHandler = { [weak self] in self?.select(.normal) }
     for publisher in [mode.objectWillChange.eraseToAnyPublisher(), audio.objectWillChange.eraseToAnyPublisher(), launchers.objectWillChange.eraseToAnyPublisher()] {
       publisher.sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
     }
-    store.$microHardwareConfirmed.sink { [weak self] value in
-      Task { @MainActor in guard let self, self.active == .codex else { return }; self.confirmed = value }
-    }.store(in: &subscriptions)
     hotkeys.next = { [weak self] in self?.select(nil) }
     hotkeys.launch = { [weak self] number in self?.launch(number) }
     launchers.changed = { [weak self] in
-      guard let self else { return }; self.store.microLauncherColors = self.launchers.enabled
-      self.configureHotkeys()
+      guard let self else { return }; self.configureHotkeys()
       if self.confirmed && [.codex, .boca].contains(self.active) { self.select(self.active) }
     }
   }
+  private func setRequested(_ target: KeyboardSkin?) { requested = target }
   func start() {
     guard !started else { return }; started = true
-    mode.externalTransitioning = true
     mode.start(); configureHotkeys()
+    guard !recoveryLoadFailed, !store.previewMode else { return }
+    Task {
+      do {
+        try await waitForIdle(); try await store.readKeyboardForMicro()
+        if let current = store.original { try reconcile(current); confirmed = true; store.adoptSkinSession(state.session, confirmed: true) }
+      } catch { transitionError = error.localizedDescription }
+    }
   }
   private func configureHotkeys() {
     guard !store.previewMode else { return }
@@ -80,28 +101,19 @@ final class KeyboardSkinController: ObservableObject {
     catch { shortcutMessage = error.localizedDescription }
   }
   func select(_ skin: KeyboardSkin?) {
-    Task {
-      let response = await request(skin)
-      if !response.ok { store.error = response.error; showWindow() }
-    }
+    Task { let response = await request(skin); if !response.ok { transitionError = response.error } }
   }
   private func request(_ skin: KeyboardSkin?, toggleCodex: Bool = false) async -> MicroControlResponse {
     guard canSwitch else { return .init(ok: false, status: status, error: "Aplicá o descartá los cambios pendientes antes de cambiar de skin.") }
     if skin == .music { audioPanelVisible = true }
-    pending += 1; mode.externalTransitioning = true
-    defer {
-      pending -= 1
-      if pending == 0 { mode.externalTransitioning = active != .codex; if confirmed && active != .normal { startWorker() } }
-    }
-    return await requests.submit(skin, current: active, toggleCodex: toggleCodex, includeMusic: false)
+    pending += 1; transitionError = nil
+    defer { pending -= 1; if pending == 0 { requested = nil; startWorker() } }
+    return await requests.submit(skin, current: active, toggleCodex: toggleCodex, includeMusic: musicAvailable)
   }
   func prepareToQuit() async -> Bool {
     if store.previewMode { return true }
-    guard recovery != nil || store.microRecovery != nil || active != .normal || busy else {
-      await audio.stop(); return true
-    }
-    quitting = true
-    pending += 1; mode.externalTransitioning = true
+    guard state.session != nil || state.pending != nil || busy else { await audio.stop(); return true }
+    quitting = true; pending += 1
     let response = await requests.submit(.normal, current: active)
     pending -= 1; quitting = false
     if !response.ok { store.error = response.error; showWindow() }
@@ -119,11 +131,9 @@ final class KeyboardSkinController: ObservableObject {
     case .skinBoca: return await request(.boca)
     case .skinMusic: return await request(.music)
     case .audioOn:
-      audioPanelVisible = true; galleryVisible = true
-      await audio.start()
+      audioPanelVisible = true; galleryVisible = true; await audio.start()
       return .init(ok: audio.connected, status: status, error: audio.connected ? nil : audio.message)
-    case .audioOff:
-      await audio.stop(); return .init(ok: true, status: status)
+    case .audioOff: await audio.stop(); return .init(ok: true, status: status)
     case .launchF1, .launchF2, .launchF3, .launchF4:
       let number = [MicroCommand.launchF1, .launchF2, .launchF3, .launchF4].firstIndex(of: command)! + 1
       do { try await launchers.launch(number); return .init(ok: true, status: status) }
@@ -138,97 +148,97 @@ final class KeyboardSkinController: ObservableObject {
     }
     guard !store.changed else { throw S136Error.message("Aplicá o descartá los cambios pendientes antes de cambiar de skin.") }
   }
-  private func stopWorker() async {
-    let previous = worker; worker = nil
-    previous?.cancel(); await previous?.value
+  private func stopWorker() async { let previous = worker; worker = nil; previous?.cancel(); await previous?.value }
+  private func reconcile(_ current: Snapshot) throws {
+    if let journal = state.pending {
+      state.session = try journal.resolved(on: current); state.pending = nil
+      try repository.save(state)
+    } else if let session = state.session { _ = try session.restored(on: current) }
+    active = state.session?.skin ?? .normal
   }
   private func transition(to target: KeyboardSkin) async -> MicroControlResponse {
+    var wasConfirmed = confirmed
+    let changedSkin = active != target || !confirmed
     do {
-      await stopWorker()
       try await waitForIdle()
+      // Preflight must leave the current skin intact when the next one is unavailable.
+      if target == .music && !musicAvailable {
+        audioPanelVisible = true
+        throw S136Error.message(musicMessage)
+      }
+      if target == .music {
+        await audio.start()
+        guard audio.connected else { throw S136Error.message(audio.message) }
+      }
+      await stopWorker()
+      if active == .music, let session = state.session { try await store.stopLiveColors(known: session.installed) }
+      try await store.readKeyboardForMicro()
+      guard let current = store.original else { throw S136Error.message("No se pudo leer el K628.") }
+      try reconcile(current); confirmed = true; wasConfirmed = true
+      guard target != .music || current.endpoint.supportsLiveLighting else { throw S136Error.message(musicMessage) }
+      let syncCodex = mode.micro.syncLights || (active != .codex && !mode.micro.router.routes.isEmpty)
+      let states = target == .codex && syncCodex ? mode.micro.hardwareStates : nil
+      let plan = try KeyboardSkinSession.plan(target, from: state.session, current: current,
+        bindings: mode.micro.bindings, states: states, launchers: launchers.enabled)
+      let journal = SkinTransitionJournal(previous: state.session, proposed: plan.session, before: current, after: plan.snapshot)
+      state.pending = journal; try repository.save(state)
+      if !current.sameContents(as: plan.snapshot) { _ = try await store.installStaticSkin(current, planned: plan.snapshot) }
+      if target == .music {
+        try await store.sendLiveColors(SkinPalette.colors(for: .music, baseline: plan.snapshot.customColors ?? [], bands: audio.bands, launchers: launchers.enabled), known: plan.snapshot)
+      }
+      let committed = SkinSessionState(session: plan.session, pending: nil)
+      try repository.save(committed); state = committed
+      active = target; confirmed = true; transitionError = nil
+      store.adoptSkinSession(state.session, confirmed: true)
+      mode.micro.skinEnabled = target == .codex && !galleryVisible
+      if target == .codex { mode.micro.syncLights = syncCodex }
       if target != .music { await audio.stop(); audioPanelVisible = false }
-      if let known = liveKnown ?? (store.microRecovery != nil ? store.microRecovery?.installed : nil) {
-        if known.configuration[1] == 29 { try await store.stopLiveColors(known: known) }
-        if let record = recovery { try await store.restoreLiveMode(record) }
-        try repository.clear(); recovery = nil; liveKnown = nil; store.liveSkinOwnsKeyboard = false
-        if active != .codex { active = .normal; confirmed = true }
-      }
-      if target != .codex, store.microRecovery != nil {
-        let response = await mode.execute(.off)
-        guard response.ok else { throw S136Error.message(response.error ?? "No se pudo restaurar Codex.") }
-        active = .normal; confirmed = true
-      }
-      switch target {
-      case .normal:
-        mode.micro.skinEnabled = false
-      case .codex:
-        let response = await mode.execute(.on)
-        guard response.ok else { throw S136Error.message(response.error ?? "No se pudo activar Codex.") }
-        if store.microRecovery?.launcherColors != launchers.enabled {
-          store.updateMicro(mode.micro.bindings)
-          try await waitForIdle()
-          if let error = store.error { throw S136Error.message(error) }
-        }
-        liveKnown = store.original
-      case .boca, .music:
-        try await store.readKeyboardForMicro()
-        guard let known = store.original, let colors = known.customColors else { throw S136Error.message("No se pudo leer la paleta del K628.") }
-        if target == .music && known.endpoint.target != 0 {
-          audioPanelVisible = true; galleryVisible = true
-          throw S136Error.message("Por el receptor, las pruebas RGB temporales no cambiaron las luces. Para verificar Música, conectá el K628 por cable con el selector en OFF. Podés probar el audio en pantalla mientras tanto.")
-        }
-        let planned = target == .boca
-          ? try StaticLightingProfile.prepare(known, skin: .boca, launchers: launchers.enabled)
-          : try LiveLightingProfile.prepare(known)
-        let record = LiveSkinRecovery(baseline: known, installed: planned, skin: target)
-        try repository.save(record); recovery = record; liveKnown = known; store.liveSkinOwnsKeyboard = true
-        let installed = target == .boca
-          ? try await store.installStaticSkin(known, planned: planned)
-          : try await store.installLiveMode(known)
-        liveKnown = installed
-        if target == .music {
-          try await store.sendLiveColors(SkinPalette.colors(for: target, baseline: colors, bands: audio.bands, launchers: launchers.enabled), known: installed)
-        }
-        mode.micro.skinEnabled = false
-      }
-      active = target; confirmed = true
-      announce("Skin: \(target.title)")
-      mode.notifications.skinChanged(target.title)
+      if changedSkin { announce("Skin: \(target.title)"); mode.notifications.skinChanged(target.title) }
       var result = status; result.busy = store.busy || pending > 1
+      result.message = store.status
       return .init(ok: true, status: result)
     } catch {
-      confirmed = false
+      if let journal = state.pending {
+        do {
+          try await store.readKeyboardForMicro()
+          guard let current = store.original else { throw error }
+          // A frame can fail after configuration committed. Restore the previous skin too.
+          if current.sameContents(as: journal.after), !current.sameContents(as: journal.before) {
+            if journal.proposed?.skin == .music { try await store.stopLiveColors(known: current) }
+            _ = try await store.installStaticSkin(current, planned: journal.before.preparedForRestore(on: current))
+          }
+          guard let restored = store.original else { throw error }
+          try reconcile(restored); confirmed = true; store.adoptSkinSession(state.session, confirmed: true)
+        } catch { confirmed = false }
+      } else { confirmed = wasConfirmed }
+      if active != .music { await audio.stop() }
+      transitionError = error.localizedDescription
       var result = status; result.busy = store.busy || pending > 1
       return .init(ok: false, status: result, error: error.localizedDescription)
     }
   }
-  private var currentKeyboard: Snapshot? {
-    if let current = store.original, current.isKeyboard, current.profile == liveKnown?.profile { return current }
-    return liveKnown
+  private func refreshCodex() {
+    guard !refreshing, !busy, active == .codex, confirmed, mode.micro.syncLights,
+      !store.busy, !store.changed, let session = state.session,
+      let plan = try? KeyboardSkinSession.plan(.codex, from: session, current: session.installed,
+        bindings: mode.micro.bindings, states: mode.micro.hardwareStates, launchers: launchers.enabled),
+      !plan.snapshot.sameContents(as: session.installed) else { return }
+    refreshing = true
+    Task { _ = await request(.codex); refreshing = false }
   }
   private func startWorker() {
-    guard worker == nil, confirmed, active == .music else { return }
+    guard worker == nil, confirmed, active == .music, let session = state.session else { return }
     worker = Task { [weak self] in
       var previous: [UInt8]?
       while !Task.isCancelled {
         guard let self else { return }
-        if self.pending == 0, !self.store.busy, !self.mode.transitioning, !self.store.changed,
-           let known = self.currentKeyboard, let palette = known.customColors {
-          self.liveKnown = known
-          var base = palette
-          if self.active == .codex && self.mode.micro.syncLights {
-            for (index, state) in self.mode.micro.hardwareStates.enumerated() {
-              let slot = CodexMicroProfile.slots[index]
-              base.replaceSubrange(slot*3..<slot*3+3, with: state.rgb)
-            }
-          }
-          let colors = SkinPalette.colors(for: self.active, baseline: base, bands: self.audio.connected ? self.audio.bands : [], launchers: self.launchers.enabled)
-          if previous != colors {
-            do { try await self.store.sendLiveColors(colors, known: known); previous = colors }
-            catch { self.announce("No se pudieron actualizar las luces: \(error.localizedDescription)"); self.confirmed = false; return }
-          }
+        if !self.busy, !self.store.busy, !self.store.changed {
+          let colors = SkinPalette.colors(for: .music, baseline: session.installed.customColors ?? [],
+            bands: self.audio.connected ? self.audio.bands : [], launchers: self.launchers.enabled)
+          do { try await self.store.sendLiveColors(colors, known: session.installed, refreshOnly: previous == colors); previous = colors }
+          catch { self.transitionError = "Se detuvo la animación: \(error.localizedDescription)"; return }
         }
-        do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+        do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
       }
     }
   }

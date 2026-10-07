@@ -72,8 +72,8 @@ struct ContentView: View {
         Button("Skins") { skins.galleryVisible = true }
       }
       ToolbarItem {
-        Picker("Skin activa", selection: Binding(get: { skins.active }, set: { skins.select($0) })) {
-          ForEach(KeyboardSkin.allCases) { skin in Text(skin.title).tag(skin) }
+        Picker("Skin activa", selection: Binding(get: { skins.requested ?? skins.active }, set: { skins.select($0) })) {
+          ForEach(KeyboardSkin.allCases.filter { $0 != .music || skins.musicAvailable || skins.active == .music }) { skin in Text(skin.title).tag(skin) }
         }.frame(width: 165).disabled(!skins.canSwitch)
       }
       ToolbarItem {

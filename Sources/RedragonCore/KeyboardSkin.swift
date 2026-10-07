@@ -41,11 +41,13 @@ public enum SkinPalette {
 
 /// Enter the vendor's host-driven lighting mode once. Frames use volatile 0x12.
 public enum LiveLightingProfile {
+  public static let refreshOffset = (0..<128).first { slot in !KeyboardLayout.keys.contains { $0.slot == slot } }! * 3
   public static func prepare(_ baseline: Snapshot) throws -> Snapshot {
     try baseline.validateStructure()
     guard baseline.isKeyboard, baseline.customColors != nil else { throw S136Error.message("Se requiere el K628 con su paleta leída.") }
     var value = baseline
-    value.configuration[1] = 29
+    // Vendor UI effects 29/30 serialize as firmware mode FE (0x4964a3…0x4964bb).
+    value.configuration[1] = 0xfe
     if value.configuration[2] == 0 { value.configuration[2] = 4 }
     return value
   }
@@ -62,29 +64,42 @@ public enum LiveLightingProfile {
   }
 }
 
-/// FIFO keeps repeated 'next' presses relative to the queued target, not stale hardware.
+/// Finish the in-flight write, then apply the latest intent. Obsolete selections share
+/// the result of the final selection; no hardware transactions run concurrently.
 public actor SkinRequestQueue {
-  private struct Request { let target: KeyboardSkin; let continuation: CheckedContinuation<MicroControlResponse, Never> }
-  private var requests: [Request] = []
+  private var waiting: [CheckedContinuation<MicroControlResponse, Never>] = []
+  private var queued: KeyboardSkin?
+  private var inFlight: KeyboardSkin?
   private var draining = false
   private let transition: @Sendable (KeyboardSkin) async -> MicroControlResponse
-  public init(transition: @escaping @Sendable (KeyboardSkin) async -> MicroControlResponse) { self.transition = transition }
+  private let changed: @Sendable (KeyboardSkin?) async -> Void
+  public init(transition: @escaping @Sendable (KeyboardSkin) async -> MicroControlResponse,
+              changed: @escaping @Sendable (KeyboardSkin?) async -> Void = { _ in }) {
+    self.transition = transition; self.changed = changed
+  }
   public func submit(_ target: KeyboardSkin?, current: KeyboardSkin, toggleCodex: Bool = false, includeMusic: Bool = true) async -> MicroControlResponse {
-    let previous = requests.last?.target ?? current
+    let previous = queued ?? inFlight ?? current
     var resolved = toggleCodex ? (previous == .codex ? KeyboardSkin.normal : .codex) : (target ?? previous.next)
     if target == nil && !toggleCodex && !includeMusic && resolved == .music { resolved = .normal }
     return await withCheckedContinuation { continuation in
-      requests.append(.init(target: resolved, continuation: continuation))
+      queued = resolved; waiting.append(continuation)
       if !draining { draining = true; Task { await drain() } }
+      else { Task { await changed(resolved) } }
     }
   }
-  public var pendingTargets: [KeyboardSkin] { requests.map(\.target) }
+  public var pendingTargets: [KeyboardSkin] { [inFlight, queued].compactMap { $0 } }
   private func drain() async {
-    while let request = requests.first {
-      let result = await transition(request.target)
-      requests.removeFirst(); request.continuation.resume(returning: result)
+    while let target = queued {
+      let continuations = waiting; waiting = []; queued = nil; inFlight = target
+      await changed(target)
+      let result = await transition(target)
+      inFlight = nil
+      var status = result.status
+      status.busy = queued != nil; status.requestedSkin = queued?.rawValue
+      for continuation in continuations { continuation.resume(returning: .init(ok: result.ok, status: status, error: result.error)) }
     }
     draining = false
+    await changed(nil)
   }
 }
 

@@ -24,6 +24,7 @@ public struct MicroControlStatus: Codable, Sendable {
   public var busy: Bool
   public var message: String
   public var skin: String?
+  public var requestedSkin: String?
   public var audioConnected: Bool?
   public var audioLevel: Float?
   public var audioMessage: String?

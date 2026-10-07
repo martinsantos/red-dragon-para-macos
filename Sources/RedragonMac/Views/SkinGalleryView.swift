@@ -17,16 +17,20 @@ struct SkinGalleryView: View {
             Text("Luces y accesos rápidos, en una sola ventana.").foregroundStyle(.secondary)
           }
           Spacer()
-          if skins.busy { ProgressView().controlSize(.small); Text("Cambiando…") }
+          if skins.busy { ProgressView().controlSize(.small); Text("Cambiando a \((skins.requested ?? skins.active).title)…") }
           else { Label(skins.confirmed ? "Activa: \(skins.active.title)" : "\(skins.active.title) · sin confirmar", systemImage: skins.confirmed ? "checkmark.circle" : "circle.dashed").foregroundStyle(skins.confirmed ? Color.green : .secondary) }
         }
         HStack(spacing: 12) { ForEach(KeyboardSkin.allCases) { skin in skinCard(skin) } }
+        if let error = skins.transitionError {
+          Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
+          Text("La skin activa sigue siendo \(skins.active.title). Podés elegir otra o volver a Normal.").font(.caption).foregroundStyle(.secondary)
+        }
         HStack {
           Text(skins.shortcutMessage).font(.callout)
           Spacer()
           Button("Siguiente skin") { skins.select(nil) }.disabled(!skins.canSwitch)
         }
-        Text("Normal recupera tus luces y teclas. Codex asigna Num 1–6; Boca y Música cambian las luces sin reasignar teclas. Volvé a Normal para recuperar tus ajustes.")
+        Text("Normal recupera tus luces y teclas. Podés cambiar directamente entre skins. Si elegís varias durante una escritura, se aplica la última elección.")
           .font(.callout).foregroundStyle(.secondary)
         if let preview = preview {
           KeyboardDiagram(snapshot: preview, mode: .lighting, instruction: "Los colores muestran la skin activa. Elegí otra skin arriba para cambiar el teclado.", selectedSlot: $selectedSlot)
@@ -83,17 +87,20 @@ struct SkinGalleryView: View {
     }
   }
   private func skinCard(_ skin: KeyboardSkin) -> some View {
-    Button { skins.select(skin) } label: {
+    Button {
+      if skin == .music && !skins.musicAvailable { skins.audioPanelVisible = true }
+      else { skins.select(skin) }
+    } label: {
       VStack(alignment: .leading, spacing: 12) {
         Image(systemName: symbol(skin)).font(.title2)
         Text(skin.title).font(.headline)
         Text(description(skin)).font(.caption).foregroundStyle(.secondary).frame(height: 34, alignment: .topLeading)
-        Text(skins.active == skin && skins.confirmed ? "Activa" : "Activar").font(.caption.bold())
+        Text(skins.requested == skin ? "Pendiente…" : skins.active == skin && skins.confirmed ? "Activa" : skin == .music && !skins.musicAvailable ? "Requiere cable USB" : "Activar").font(.caption.bold())
       }.frame(maxWidth: .infinity, alignment: .leading).padding(16)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.accentColor.opacity(skins.active == skin ? 0.13 : 0.03)))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(skins.active == skin ? Color.accentColor : Color.primary.opacity(0.15)))
     }.buttonStyle(.plain).disabled(!skins.canSwitch)
-      .accessibilityLabel("Activar skin \(skin.title)")
+      .accessibilityLabel(skin == .music && !skins.musicAvailable ? "Música requiere cable USB · mostrar instrucciones" : "Activar skin \(skin.title)")
   }
   private var preview: Snapshot? {
     guard var value = skins.store.original, value.isKeyboard, let colors = value.customColors else { return nil }
