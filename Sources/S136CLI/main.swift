@@ -6,14 +6,15 @@ import RedragonCore
 struct CLI {
   static func main() async {
     do {
-      if ["skin", "launch", "audio"].contains(CommandLine.arguments.dropFirst().first ?? "") {
+      if ["skin", "launch", "pad", "audio"].contains(CommandLine.arguments.dropFirst().first ?? "") {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        let commands: [String: MicroCommand] = ["next": .skinNext, "normal": .skinNormal, "codex": .skinCodex, "boca": .skinBoca, "music": .skinMusic, "status": .status, "show": .skinsShow]
+        let commands: [String: MicroCommand] = ["next": .skinNext, "normal": .skinNormal, "apps": .skinApps, "codex": .skinCodex, "claude": .skinClaude, "boca": .skinBoca, "music": .skinMusic, "status": .status, "show": .skinsShow, "retry-shortcut": .hotkeysRetry]
         let audio: [String: MicroCommand] = ["on": .audioOn, "off": .audioOff, "status": .status]
-        let launches: [String: MicroCommand] = ["f1": .launchF1, "f2": .launchF2, "f3": .launchF3, "f4": .launchF4]
+        let launches: [String: MicroCommand] = ["1": .launchF1, "2": .launchF2, "3": .launchF3, "4": .launchF4, "f1": .launchF1, "f2": .launchF2, "f3": .launchF3, "f4": .launchF4]
+        let pad: [String: MicroCommand] = ["1": .pad1, "2": .pad2, "3": .pad3, "4": .pad4, "5": .pad5, "6": .pad6]
         guard arguments.count >= 2, arguments.dropFirst(2).allSatisfy({ $0 == "--json" }),
-          let command = (arguments[0] == "skin" ? commands : arguments[0] == "audio" ? audio : launches)[arguments[1]] else {
-          throw S136Error.message("Uso: s136ctl skin next|normal|codex|boca|music|status|show [--json] | launch f1|f2|f3|f4 [--json] | audio on|off|status [--json]")
+          let command = (arguments[0] == "skin" ? commands : arguments[0] == "audio" ? audio : arguments[0] == "pad" ? pad : launches)[arguments[1]] else {
+          throw S136Error.message("Uso: s136ctl skin next|normal|apps|codex|claude|boca|music|status|show|retry-shortcut [--json] | launch 1|2|3|4 [--json] | pad 1|2|3|4|5|6 [--json] | audio on|off|status [--json]")
         }
         let response = try MicroControlSocket.send(command)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

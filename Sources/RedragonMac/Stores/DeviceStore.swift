@@ -427,7 +427,9 @@ final class DeviceStore: ObservableObject {
     if confirmed {
       switch session?.skin ?? .normal {
       case .normal: status = "Teclas y luces anteriores restauradas y verificadas."
-      case .codex: status = "Codex Micro activo · Num 1–6 · respaldo guardado."
+      case .apps: status = "Apps activa · 1–4 abren aplicaciones sin Fn."
+      case .codex: status = "Codex activo · 1–4 aplicaciones · Num 1–6 funciones."
+      case .claude: status = "Claude activo · 1–4 aplicaciones · Num 1–6 funciones."
       case .boca: status = "Boca activa · paleta guardada y verificada."
       case .music: status = "Música activa · audio del sistema · RGB temporal por USB."
       }

@@ -1,5 +1,21 @@
 # Cambios
 
+## 0.6.0 · accesos físicos y perfiles de aplicaciones
+
+- ⌘Espacio recorre seis skins; muestra colisiones con Spotlight sin desactivar las acciones independientes.
+- 1–4 de la fila superior abren Codex, Claude, Chrome y WhatsApp sin Fn ni Enter, con azul, naranja, violeta y verde. Normal o desactivar los accesos restaura los números.
+- Apps y Claude, funciones Num 1–6 para cada app, y selector opcional Funciones / Chats en Codex. Uso abre los paneles oficiales; ninguna acción responde o aprueba por el usuario.
+- La primera pulsación de Chrome recupera su última ventana; las siguientes recorren ventanas existentes.
+- Auto opcional sigue la app activa. Una selección manual fija la skin y desactiva Auto.
+- Recuperación compatible con sesiones anteriores; reserva de teclas antes de escribir, restauración selectiva y conservación de Fn y macros.
+- 28 comprobaciones incluyen mapas 1–4, funciones del pad, colores, regreso a Normal, perfiles automáticos y recorrido de Chrome. Pruebas físicas y límites se detallan en VALIDATION.md.
+
+## 0.5.1 · Música por USB
+
+- Identificación y lectura de K628 320F:509D por cable con selector OFF.
+- Corrección al modo FE de firmware; refresco temporal sin escrituras por cuadro a memoria persistente.
+- Ondas de Música observadas por el usuario; 25 comprobaciones y restauración verificadas.
+
 ## 0.5.0 · skins y accesos globales
 
 - Panel único Normal / Codex Micro / Boca / Música, atajo ⌘⌥F4, aviso del nombre y comandos skin.

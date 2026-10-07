@@ -11,6 +11,7 @@ final class MicroModeController: ObservableObject {
   let notifications: MicroNotifications
   var controlHandler: ((MicroCommand) async -> MicroControlResponse)?
   var synchronizeHandler: (() -> Void)?
+  var externalHotkeys = false
   var externalTransitioning = false
   @Published private(set) var transitioning = false
   @Published private(set) var requestedMode: Bool?
@@ -176,7 +177,7 @@ final class MicroModeController: ObservableObject {
       return .init(ok: false, status: finished, error: error.localizedDescription)
     }
   }
-  private func registerActions() { micro.registerHardware(store.microBindingsForHotkeys) }
+  private func registerActions() { micro.registerHardware(externalHotkeys ? nil : store.microBindingsForHotkeys) }
   private func observeRouter() {
     let states = micro.router.states
     let alerts = tracker.update(states, questions: micro.router.pendingQuestions)

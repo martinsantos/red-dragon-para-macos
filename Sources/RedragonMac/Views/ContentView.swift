@@ -53,11 +53,13 @@ struct ContentView: View {
         if skins.galleryVisible {
           SkinGalleryView(skins: skins)
         } else if micro.skinEnabled {
-          CodexMicroView(store: store, micro: micro, mode: mode, showLighting: {
+          if skins.active.hasActionPad && skins.usesFunctionPad && !skins.codexChatPad {
+            ScrollView { ApplicationProfileView(skins: skins).padding(28) }
+          } else { CodexMicroView(store: store, micro: micro, mode: mode, showLighting: {
             normalSection = .lighting
             skins.galleryVisible = false
             skins.select(.normal)
-          })
+          }) }
         } else {
           DeviceDetailView(section: section, store: store)
         }

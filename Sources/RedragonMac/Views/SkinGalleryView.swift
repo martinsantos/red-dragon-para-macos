@@ -20,7 +20,9 @@ struct SkinGalleryView: View {
           if skins.busy { ProgressView().controlSize(.small); Text("Cambiando a \((skins.requested ?? skins.active).title)…") }
           else { Label(skins.confirmed ? "Activa: \(skins.active.title)" : "\(skins.active.title) · sin confirmar", systemImage: skins.confirmed ? "checkmark.circle" : "circle.dashed").foregroundStyle(skins.confirmed ? Color.green : .secondary) }
         }
-        HStack(spacing: 12) { ForEach(KeyboardSkin.allCases) { skin in skinCard(skin) } }
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 12)], spacing: 12) {
+          ForEach(KeyboardSkin.allCases) { skin in skinCard(skin) }
+        }
         if let error = skins.transitionError {
           Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
           Text("La skin activa sigue siendo \(skins.active.title). Podés elegir otra o volver a Normal.").font(.caption).foregroundStyle(.secondary)
@@ -28,10 +30,14 @@ struct SkinGalleryView: View {
         HStack {
           Text(skins.shortcutMessage).font(.callout)
           Spacer()
+          Button("Reintentar atajo") { skins.configureHotkeys() }
           Button("Siguiente skin") { skins.select(nil) }.disabled(!skins.canSwitch)
         }
-        Text("Normal recupera tus luces y teclas. Podés cambiar directamente entre skins. Si elegís varias durante una escritura, se aplica la última elección.")
+        Toggle("Auto · perfil según la aplicación activa", isOn: $skins.autoProfiles)
+          .help("Codex y Claude seleccionan sus funciones. Chrome y WhatsApp seleccionan Apps. Elegir una skin manualmente desactiva Auto.")
+        Text("Normal recupera tus luces y números. En las otras skins, 1–4 quedan dedicadas a abrir apps sin Fn. Si elegís varias durante una escritura, se aplica la última elección.")
           .font(.callout).foregroundStyle(.secondary)
+        if skins.active.hasActionPad { ApplicationProfileView(skins: skins) }
         if let preview = preview {
           KeyboardDiagram(snapshot: preview, mode: .lighting, instruction: "Los colores muestran la skin activa. Elegí otra skin arriba para cambiar el teclado.", selectedSlot: $selectedSlot)
           Text("Vista de los colores enviados · la confirmación USB no mide el brillo físico de cada LED.").font(.caption).foregroundStyle(.secondary)
@@ -53,27 +59,28 @@ struct SkinGalleryView: View {
                 }.disabled(audio.starting || skins.busy)
               }
               Text(skins.musicMessage).font(.callout).foregroundStyle(.orange)
-              Text("macOS pide Grabación de pantalla y audio del sistema. Esta función procesa niveles de audio en memoria: no guarda audio, no usa el micrófono y no recibe cuadros de video. En silencio se apagan las ondas; F1–F4 conservan sus colores.")
+              Text("macOS pide Grabación de pantalla y audio del sistema. Esta función procesa niveles de audio en memoria: no guarda audio, no usa el micrófono y no recibe cuadros de video. En silencio se apagan las ondas; 1–4 conservan sus colores.")
                 .font(.caption).foregroundStyle(.secondary)
             }.padding(8)
           }
         }
         GroupBox {
           VStack(alignment: .leading, spacing: 14) {
-            Toggle("Accesos globales F1–F4", isOn: $launchers.enabled).font(.headline)
-            Text("Funcionan con cualquier skin mientras esta app está abierta. En el K628, usá Fn + 1…4; los colores se muestran en esas teclas. Al desactivarlos, F1–F4 vuelven a las otras apps.").font(.callout).foregroundStyle(.secondary)
+            Toggle("Accesos globales 1–4", isOn: $launchers.enabled).font(.headline)
+            Text(skins.launcherKeysActive ? "Activos en el K628: pulsá 1, 2, 3 o 4, sin Fn ni Enter, desde cualquier app. Normal recupera los números." : "Elegí Apps, Codex, Claude, Boca o Música para dedicar las teclas 1–4. En Normal podés escribir sus números.")
+              .font(.callout).foregroundStyle(.secondary)
             ForEach(launchers.bindings) { binding in
               HStack(spacing: 12) {
                 let rgb = SkinPalette.launcherColors[binding.number-1]
                 Circle().fill(Color(red: Double(rgb[0])/255, green: Double(rgb[1])/255, blue: Double(rgb[2])/255)).frame(width: 12, height: 12)
-                Text("F\(binding.number)").font(.system(.headline, design: .monospaced)).frame(width: 32)
+                Text("\(binding.number)").font(.system(.headline, design: .monospaced)).frame(width: 32)
                 Text(binding.title).frame(maxWidth: .infinity, alignment: .leading)
                 Button("Abrir") { skins.launch(binding.number) }.disabled(!launchers.enabled)
                 Button("Cambiar app…") { launchers.choose(binding.number) }
               }
             }
             Text(launchers.message).font(.caption).foregroundStyle(.secondary)
-            Text("Codex y Claude vuelven a su ventana existente, con el chat que dejaste abierto. Si cerraste la app, la recuperación del chat depende de ella. F3 recorre las ventanas existentes de Chrome, incluso cuando otra app está al frente.").font(.caption).foregroundStyle(.secondary)
+            Text("Codex y Claude vuelven a su ventana existente, con el chat que dejaste abierto. Si cerraste la app, la recuperación del chat depende de ella. El primer 3 trae la última ventana de Chrome; las pulsaciones siguientes recorren sus ventanas existentes.").font(.caption).foregroundStyle(.secondary)
             HStack {
               if !launchers.accessibilityAllowed {
                 Button("Habilitar Accesibilidad para recorrer Chrome") { launchers.openAccessibilitySettings() }
@@ -104,16 +111,16 @@ struct SkinGalleryView: View {
   }
   private var preview: Snapshot? {
     guard var value = skins.store.original, value.isKeyboard, let colors = value.customColors else { return nil }
-    if skins.active != .normal {
+    if skins.active != .normal && !(skins.active == .codex && skins.codexChatPad) {
       value.customColors = SkinPalette.colors(for: skins.active, baseline: colors, bands: audio.connected ? audio.bands : [], launchers: launchers.enabled)
       value.configuration[1] = 19
     }
     return value
   }
   private func symbol(_ skin: KeyboardSkin) -> String {
-    switch skin { case .normal: "keyboard"; case .codex: "circle.hexagongrid"; case .boca: "flag"; case .music: "waveform" }
+    switch skin { case .normal: "keyboard"; case .apps: "square.grid.2x2"; case .codex: "circle.hexagongrid"; case .claude: "sparkle"; case .boca: "flag"; case .music: "waveform" }
   }
   private func description(_ skin: KeyboardSkin) -> String {
-    switch skin { case .normal: "Tus ajustes anteriores"; case .codex: "Agentes y prefunciones"; case .boca: "Azul · amarillo · azul"; case .music: "Ondas con el audio de la Mac" }
+    switch skin { case .normal: "Tus luces y números"; case .apps: "1–4 · abrir aplicaciones"; case .codex: "Uso, preguntas y herramientas"; case .claude: "Chats, modelo y herramientas"; case .boca: "Azul · amarillo · azul"; case .music: "Ondas con el audio de la Mac" }
   }
 }

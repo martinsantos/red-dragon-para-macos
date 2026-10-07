@@ -8,6 +8,9 @@ public struct KeyboardSkinSession: Codable, Sendable {
   public var skin: KeyboardSkin
   public var launcherColors: Bool
   public var bindings: [MicroBinding]
+  public var launcherKeys: Bool? = nil
+  public var controlPad: Bool? = nil
+  public var chatPad: Bool? = nil
   public init(baseline: Snapshot, installed: Snapshot, skin: KeyboardSkin,
               launcherColors: Bool = false, bindings: [MicroBinding] = MicroBinding.defaults) {
     self.baseline = baseline; self.installed = installed; self.skin = skin
@@ -24,30 +27,62 @@ public struct KeyboardSkinSession: Codable, Sendable {
     let sent = try installed.preparedForRestore(on: current)
     // A failed first activation may already have rolled back to the baseline.
     if current.sameContents(as: before) { return current }
+    var restored: Snapshot
     switch skin {
     case .codex:
-      return try CodexMicroProfile.restore(baseline: before, installed: sent, current: current, launcherColors: launcherColors)
-    case .boca:
-      return try StaticLightingProfile.restore(baseline: before, installed: sent, current: current)
+      if controlPad == true {
+        let unmapped = try ApplicationControlProfile.restorePad(baseline: before, installed: sent, current: current)
+        restored = try StaticLightingProfile.restore(baseline: before, installed: sent, current: current)
+        restored.keymap = unmapped.keymap
+      } else { restored = try CodexMicroProfile.restore(baseline: before, installed: sent, current: current, launcherColors: launcherColors) }
+    case .apps, .claude, .boca:
+      restored = try StaticLightingProfile.restore(baseline: before, installed: sent, current: current)
+      if controlPad == true {
+        let unmapped = try ApplicationControlProfile.restorePad(baseline: before, installed: sent, current: current)
+        restored.keymap = unmapped.keymap
+      }
     case .music:
-      return try LiveLightingProfile.restore(baseline: before, installed: sent, current: current)
+      restored = try LiveLightingProfile.restore(baseline: before, installed: sent, current: current)
     case .normal: throw S136Error.message("Normal no necesita una sesión de skin.")
     }
+    if launcherKeys == true {
+      let unmapped = try ApplicationControlProfile.restoreLaunchers(baseline: before, installed: sent, current: current)
+      for slot in ApplicationControlProfile.launcherSlots { try restored.assign(unmapped.assignment(at: slot), to: slot) }
+    }
+    return restored
   }
   public static func plan(_ target: KeyboardSkin, from previous: Self?, current: Snapshot,
-                          bindings: [MicroBinding], states: [MicroState]?, launchers: Bool) throws -> (snapshot: Snapshot, session: Self?) {
+                          bindings: [MicroBinding], states: [MicroState]?, launchers: Bool,
+                          controlPad: Bool = false, launcherKeys: Bool = false,
+                          chatPad: Bool = false) throws -> (snapshot: Snapshot, session: Self?) {
     let baseline = try previous?.restored(on: current) ?? current
     if target == .normal { return (baseline, nil) }
     var planned: Snapshot
     switch target {
     case .codex:
-      planned = try CodexMicroProfile.prepare(baseline, bindings: bindings, launcherColors: launchers)
-      if let states { planned = try CodexMicroProfile.withStates(states, on: planned) }
-    case .boca: planned = try StaticLightingProfile.prepare(baseline, skin: target, launchers: launchers)
+      if controlPad {
+        planned = try StaticLightingProfile.prepare(baseline, skin: target, launchers: launchers)
+        if chatPad {
+          planned = try CodexMicroProfile.prepare(planned, bindings: bindings, launcherColors: launchers)
+          if let states { planned = try CodexMicroProfile.withStates(states, on: planned) }
+        }
+        planned = try ApplicationControlProfile.preparePad(on: planned, preserveColors: chatPad)
+      } else {
+        planned = try CodexMicroProfile.prepare(baseline, bindings: bindings, launcherColors: launchers)
+        if let states { planned = try CodexMicroProfile.withStates(states, on: planned) }
+      }
+    case .apps, .claude, .boca:
+      planned = try StaticLightingProfile.prepare(baseline, skin: target, launchers: launchers)
+      if target == .claude { planned = try ApplicationControlProfile.preparePad(on: planned) }
     case .music: planned = try LiveLightingProfile.prepare(baseline)
     case .normal: planned = baseline
     }
-    return (planned, Self(baseline: baseline, installed: planned, skin: target, launcherColors: launchers, bindings: bindings))
+    if launcherKeys && launchers { planned = try ApplicationControlProfile.prepareLaunchers(on: planned) }
+    var session = Self(baseline: baseline, installed: planned, skin: target, launcherColors: launchers, bindings: bindings)
+    session.controlPad = target == .claude || (target == .codex && controlPad)
+    session.launcherKeys = launcherKeys && launchers
+    session.chatPad = target == .codex && chatPad
+    return (planned, session)
   }
 }
 

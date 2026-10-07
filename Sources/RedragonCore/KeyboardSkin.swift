@@ -2,11 +2,12 @@
 import Foundation
 
 public enum KeyboardSkin: String, Codable, CaseIterable, Sendable, Identifiable {
-  case normal, codex, boca, music
+  case normal, apps, codex, claude, boca, music
   public var id: String { rawValue }
   public var title: String {
-    switch self { case .normal: "Normal"; case .codex: "Codex Micro"; case .boca: "Boca"; case .music: "Música" }
+    switch self { case .normal: "Normal"; case .apps: "Apps"; case .codex: "Codex"; case .claude: "Claude"; case .boca: "Boca"; case .music: "Música" }
   }
+  public var hasActionPad: Bool { self == .codex || self == .claude }
   public var next: Self {
     let all = Self.allCases
     return all[(all.firstIndex(of: self)! + 1) % all.count]
@@ -15,13 +16,16 @@ public enum KeyboardSkin: String, Codable, CaseIterable, Sendable, Identifiable 
 
 /// Independent, temporary palettes. Never changes mappings, macros or persistent RGB.
 public enum SkinPalette {
-  public static let launcherColors: [[UInt8]] = [[40,220,160], [255,140,70], [80,140,255], [40,220,80]]
+  public static let launcherColors: [[UInt8]] = [[30,110,255], [255,140,70], [155,90,255], [40,220,80]]
   public static func colors(for skin: KeyboardSkin, baseline: [UInt8], bands: [Float] = [], launchers: Bool) -> [UInt8] {
     var result = baseline.count == 384 ? baseline : [UInt8](repeating: 0, count: 384)
-    if skin == .boca || skin == .music {
+    if [.apps, .codex, .claude, .boca, .music].contains(skin) {
       for key in KeyboardLayout.keys {
         let rgb: [UInt8]
         if skin == .boca { rgb = key.row == 2 ? [255,190,0] : [0,45,220] }
+        else if skin == .apps { rgb = [12,12,18] }
+        else if skin == .codex { rgb = [4,15,38] }
+        else if skin == .claude { rgb = [35,15,5] }
         else {
           let band = bands.isEmpty ? 0 : min(bands.count - 1, Int(key.column / KeyboardLayout.columns * Double(bands.count)))
           let level = bands.isEmpty ? Float(0) : min(1, max(0, bands[band]))
@@ -30,6 +34,12 @@ public enum SkinPalette {
           rgb = [UInt8(220 * intensity * height), UInt8(210 * intensity * (1 - height)), UInt8(255 * intensity)]
         }
         result.replaceSubrange(key.slot * 3..<key.slot * 3 + 3, with: rgb)
+      }
+    }
+    if skin.hasActionPad {
+      for index in 0..<6 {
+        let slot = CodexMicroProfile.slots[index]
+        result.replaceSubrange(slot*3..<slot*3+3, with: ApplicationControlProfile.padColors[index])
       }
     }
     if launchers {
@@ -107,7 +117,7 @@ public actor SkinRequestQueue {
 public enum StaticLightingProfile {
   public static func prepare(_ baseline: Snapshot, skin: KeyboardSkin, launchers: Bool) throws -> Snapshot {
     try baseline.validateStructure()
-    guard baseline.isKeyboard, let colors = baseline.customColors, skin == .boca else { throw S136Error.message("Elegí una skin estática compatible con el K628.") }
+    guard baseline.isKeyboard, let colors = baseline.customColors, [.apps, .codex, .claude, .boca].contains(skin) else { throw S136Error.message("Elegí una skin estática compatible con el K628.") }
     var value = baseline
     value.customColors = SkinPalette.colors(for: skin, baseline: colors, launchers: launchers)
     value.configuration[1] = 19; value.configuration[22] = 0

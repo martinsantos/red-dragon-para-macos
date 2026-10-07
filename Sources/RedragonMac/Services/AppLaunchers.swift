@@ -21,7 +21,8 @@ struct AppLauncher: Codable, Identifiable {
 final class AppLaunchers: ObservableObject {
   @Published var enabled: Bool { didSet { defaults.set(enabled, forKey: "skins.launchers.enabled"); changed?() } }
   @Published private(set) var bindings: [AppLauncher]
-  @Published private(set) var message = "F1 Codex · F2 Claude · F3 Chrome · F4 WhatsApp"
+  @Published private(set) var message = "1 Codex · 2 Claude · 3 Chrome · 4 WhatsApp"
+  @Published private(set) var lastLaunched: Int?
   var changed: (() -> Void)?
   private let defaults: UserDefaults
   private var lastWindows: [String: AXUIElement] = [:]
@@ -47,7 +48,7 @@ final class AppLaunchers: ObservableObject {
   func choose(_ number: Int) {
     let panel = NSOpenPanel(); panel.directoryURL = URL(fileURLWithPath: "/Applications")
     panel.allowedContentTypes = [.applicationBundle]; panel.canChooseDirectories = false
-    panel.message = "Elegí la app para F\(number)."; panel.prompt = "Asignar"
+    panel.message = "Elegí la app para la tecla \(number)."; panel.prompt = "Asignar"
     guard panel.runModal() == .OK, let url = panel.url, let bundle = Bundle(url: url),
       let identifier = bundle.bundleIdentifier, let index = bindings.firstIndex(where: { $0.number == number }) else { return }
     bindings[index] = .init(number: number, title: url.deletingPathExtension().lastPathComponent, bundleID: identifier)
@@ -62,49 +63,48 @@ final class AppLaunchers: ObservableObject {
   }
   func launch(_ number: Int) async throws {
     guard enabled, let binding = bindings.first(where: { $0.number == number }) else {
-      throw S136Error.message("Activá los accesos F1–F4 en Skins.")
+      throw S136Error.message("Activá los accesos 1–4 en Skins.")
     }
-    if let app = NSRunningApplication.runningApplications(withBundleIdentifier: binding.bundleID).first {
+    let wasRunning = NSRunningApplication.runningApplications(withBundleIdentifier: binding.bundleID).contains { $0.activationPolicy == .regular }
+    let wasFrontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == binding.bundleID
+    let app = try await ApplicationFocus.focus(binding.bundleID, title: binding.title)
+    if wasRunning {
       if number == 3 && binding.bundleID == "com.google.Chrome" {
         guard accessibilityAllowed else {
-          app.activate(options: [])
+          lastLaunched = number
           message = "Chrome abierto. Para recorrer sus ventanas, habilitá Accesibilidad."
           return
         }
-        try cycleChrome(app)
+        try cycleChrome(app, isFrontmost: wasFrontmost)
       } else {
-        app.activate(options: [])
         if accessibilityAllowed, let window = lastWindows[binding.bundleID] {
           AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
           AXUIElementPerformAction(window, kAXRaiseAction as CFString)
           AXUIElementSetAttributeValue(AXUIElementCreateApplication(app.processIdentifier), kAXFocusedWindowAttribute as CFString, window)
         }
       }
-      message = "F\(number) · \(binding.title) · ventana anterior"
+      lastLaunched = number
+      message = "\(number) · \(binding.title)"
       return
     }
-    guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: binding.bundleID) else {
-      throw S136Error.message("Instalá \(binding.title) o asigná otra app a F\(number).")
-    }
-    let configuration = NSWorkspace.OpenConfiguration(); configuration.activates = true
-    _ = try await NSWorkspace.shared.openApplication(at: url, configuration: configuration)
-    message = "F\(number) · \(binding.title) abierto. La app decide qué ventana recupera al iniciarse."
+    lastLaunched = number
+    message = "\(number) · \(binding.title) abierto. La app decide qué ventana recupera al iniciarse."
   }
   private func attribute(_ element: AXUIElement, _ name: String) -> CFTypeRef? {
     var value: CFTypeRef?
     return AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success ? value : nil
   }
-  private func cycleChrome(_ app: NSRunningApplication) throws {
+  private func cycleChrome(_ app: NSRunningApplication, isFrontmost: Bool) throws {
     let element = AXUIElementCreateApplication(app.processIdentifier)
     guard let all = attribute(element, kAXWindowsAttribute) as? [AXUIElement] else {
       throw S136Error.message("Chrome no permite leer sus ventanas. Revisá Accesibilidad.")
     }
     let windows = all.filter { (attribute($0, kAXSubroleAttribute) as? String) == kAXStandardWindowSubrole }
-    guard !windows.isEmpty else { app.activate(options: []); return }
-    let current = lastWindows[app.bundleIdentifier ?? ""] ?? (attribute(element, kAXFocusedWindowAttribute).map { $0 as! AXUIElement })
-    let index = current.flatMap { selected in windows.firstIndex { CFEqual(selected, $0) } }
-    let next = windows[index.map { ($0+1) % windows.count } ?? 0]
-    app.activate(options: [])
+    guard !windows.isEmpty else { return }
+    let remembered = lastWindows[app.bundleIdentifier ?? ""].flatMap { selected in windows.firstIndex { CFEqual(selected, $0) } }
+    let focused = attribute(element, kAXFocusedWindowAttribute).flatMap { selected in windows.firstIndex { CFEqual(selected, $0) } }
+    let index = ApplicationProfileRouting.chromeIndex(count: windows.count, remembered: remembered, focused: focused, isFrontmost: isFrontmost)!
+    let next = windows[index]
     AXUIElementSetAttributeValue(next, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
     guard AXUIElementPerformAction(next, kAXRaiseAction as CFString) == .success else { throw S136Error.message("No se pudo mostrar esa ventana de Chrome.") }
     AXUIElementSetAttributeValue(element, kAXFocusedWindowAttribute as CFString, next)

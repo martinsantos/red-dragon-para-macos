@@ -535,17 +535,21 @@ func checkSkinRequestQueue() async {
   let first = Task { await queue.submit(nil, current: .normal) }
   while await fixture.sequence.isEmpty { await Task.yield() }
   let second = Task { await queue.submit(nil, current: .normal) }
-  while await queue.pendingTargets.last != .boca { await Task.yield() }
+  while await queue.pendingTargets.last != .codex { await Task.yield() }
   let third = Task { await queue.submit(nil, current: .normal) }
-  while await queue.pendingTargets.last != .music { await Task.yield() }
+  while await queue.pendingTargets.last != .claude { await Task.yield() }
   let fourth = Task { await queue.submit(nil, current: .normal) }
+  while await queue.pendingTargets.last != .boca { await Task.yield() }
+  let fifth = Task { await queue.submit(nil, current: .normal) }
+  while await queue.pendingTargets.last != .music { await Task.yield() }
+  let sixth = Task { await queue.submit(nil, current: .normal) }
   while await queue.pendingTargets.last != .normal { await Task.yield() }
   await fixture.release()
-  let results = await [first.value, second.value, third.value, fourth.value]
-  expectEqual(results.map { $0.status.skin }, ["codex", "normal", "normal", "normal"])
+  let results = await [first.value, second.value, third.value, fourth.value, fifth.value, sixth.value]
+  expectEqual(results.map { $0.status.skin }, ["apps", "normal", "normal", "normal", "normal", "normal"])
   expectEqual(results.last!.status.busy, false)
   expectEqual(results.last!.status.requestedSkin, nil)
-  expectEqual(await fixture.sequence, [.codex, .normal])
+  expectEqual(await fixture.sequence, [.apps, .normal])
   expectEqual(await fixture.maximum, 1)
   let toggles = SkinQueueFixture()
   let toggleQueue = SkinRequestQueue { await toggles.transition($0) }
@@ -616,6 +620,67 @@ func checkWiredK628Recovery() throws {
   expectFailure(try wireless.preparedForRestore(on: otherRevision))
 }
 
+func checkApplicationControlsAndRecovery() throws {
+  let baseline = microFixture()
+  var current = baseline
+  var session: KeyboardSkinSession?
+  for skin in [KeyboardSkin.apps, .codex, .claude, .boca, .music, .apps, .normal] {
+    let plan = try KeyboardSkinSession.plan(skin, from: session, current: current,
+      bindings: MicroBinding.defaults, states: nil, launchers: true, controlPad: true, launcherKeys: true)
+    if skin != .normal {
+      for index in 0..<4 { expectEqual(plan.snapshot.assignment(at: index+1), ApplicationControlProfile.launcherAssignments[index]) }
+      if skin.hasActionPad {
+        for index in 0..<6 { expectEqual(plan.snapshot.assignment(at: CodexMicroProfile.slots[index]), ApplicationControlProfile.padAssignments[index]) }
+      } else {
+        for slot in CodexMicroProfile.slots { expectEqual(plan.snapshot.assignment(at: slot), baseline.assignment(at: slot)) }
+      }
+    }
+    expectEqual(plan.snapshot.assignment(at: 74), baseline.assignment(at: 74))
+    expectEqual(plan.snapshot.macroData, baseline.macroData)
+    current = plan.snapshot; session = plan.session
+  }
+  expectEqual(current.sameContents(as: baseline), true)
+  let apps = try KeyboardSkinSession.plan(.apps, from: nil, current: baseline, bindings: MicroBinding.defaults, states: nil, launchers: true, controlPad: true, launcherKeys: true)
+  var conflict = apps.snapshot; try conflict.assign(0x200004, to: 1)
+  expectFailure(try apps.session!.restored(on: conflict))
+  let disabled = try KeyboardSkinSession.plan(.apps, from: apps.session, current: apps.snapshot, bindings: MicroBinding.defaults, states: nil, launchers: false, controlPad: true, launcherKeys: true)
+  expectEqual(disabled.snapshot.keymap, baseline.keymap)
+  expectEqual(disabled.session?.launcherKeys, false)
+  expectEqual(SkinPalette.launcherColors, [[30,110,255],[255,140,70],[155,90,255],[40,220,80]])
+}
+
+func checkLegacyAndChatPadRecovery() throws {
+  let baseline = microFixture()
+  let legacy = try KeyboardSkinSession.plan(.codex, from: nil, current: baseline,
+    bindings: MicroBinding.defaults, states: nil, launchers: true)
+  let encoded = try JSONEncoder().encode(legacy.session!)
+  let decoded = try JSONDecoder().decode(KeyboardSkinSession.self, from: encoded)
+  expectEqual(decoded.launcherKeys, false)
+  expectEqual(try decoded.restored(on: legacy.snapshot).sameContents(as: baseline), true)
+  let chats = try KeyboardSkinSession.plan(.codex, from: decoded, current: legacy.snapshot,
+    bindings: MicroBinding.defaults, states: Array(repeating: .attention, count: 6), launchers: true, controlPad: true, launcherKeys: true, chatPad: true)
+  for index in 0..<6 {
+    let slot = CodexMicroProfile.slots[index]
+    expectEqual(chats.snapshot.assignment(at: slot), ApplicationControlProfile.padAssignments[index])
+    expectEqual(Array(chats.snapshot.customColors![slot*3..<slot*3+3]), MicroState.attention.rgb)
+  }
+  expectEqual(try chats.session!.restored(on: chats.snapshot).sameContents(as: baseline), true)
+}
+
+func checkApplicationRouting() {
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 2, remembered: 1, focused: 0, isFrontmost: false), 1)
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 2, remembered: 1, focused: 1, isFrontmost: true), 0)
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 2, remembered: 0, focused: 0, isFrontmost: true), 1)
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 0, remembered: 0, focused: 0, isFrontmost: true), nil)
+  expectEqual(ApplicationProfileRouting.chromeIndex(count: 1, remembered: 99, focused: nil, isFrontmost: true), 0)
+  expectEqual(ApplicationProfileRouting.skin(for: "com.openai.codex"), .codex)
+  expectEqual(ApplicationProfileRouting.skin(for: "com.anthropic.claudefordesktop"), .claude)
+  expectEqual(ApplicationProfileRouting.skin(for: "com.google.Chrome"), .apps)
+  expectEqual(ApplicationProfileRouting.skin(for: "com.apple.systempreferences"), nil)
+  expectEqual(ApplicationPadAction.actions(for: .codex), [.usage,.attention,.dictation,.model,.review,.newChat])
+  expectEqual(ApplicationPadAction.actions(for: .claude).last, .settings)
+}
+
 let checks = ProtocolChecks()
 let physicalKeys = KeyboardLayout.keys
 expectEqual(physicalKeys.count, 78)
@@ -652,4 +717,7 @@ await checkSkinRequestQueue()
 try checkDirectSkinTransitions()
 try checkInterruptedSkinTransition()
 try checkWiredK628Recovery()
-print("PASS: 25 protocol, recovery, lighting, router, command, skin queue and audio checks.")
+try checkApplicationControlsAndRecovery()
+try checkLegacyAndChatPadRecovery()
+checkApplicationRouting()
+print("PASS: 28 protocol, recovery, lighting, routing, command, skin queue and audio checks.")

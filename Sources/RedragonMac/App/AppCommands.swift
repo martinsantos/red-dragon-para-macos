@@ -16,7 +16,8 @@ struct AppCommands: Commands {
         .keyboardShortcut("s").disabled(!store.canApply)
     }
     CommandMenu("Skins") {
-      Button("Siguiente skin · ⌘⌥F4") { skins.select(nil) }.disabled(!skins.canSwitch)
+      Button("Siguiente skin · ⌘Espacio") { skins.select(nil) }.disabled(!skins.canSwitch)
+      Toggle("Auto · según aplicación", isOn: $skins.autoProfiles)
       ForEach(KeyboardSkin.allCases) { skin in
         Button("Activar \(skin.title)") { skins.select(skin) }.disabled(!skins.canSwitch || (skin == .music && !skins.musicAvailable))
       }
